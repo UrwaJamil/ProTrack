@@ -1,0 +1,116 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Any signed-in user may read a profile (member lists, assignee
+    // pickers, @mentions), but only their own doc is writable. List
+    // queries (the "Assign Team Member" email search, avatar lookups by
+    // id) must set limit <= 30, which makes bulk-downloading every profile
+    // harder. `emailLower`, when present, must match `email`.
+    match /users/{uid} {
+      function emailLowerOk() {
+        return !('emailLower' in request.resource.data)
+          || request.resource.data.emailLower
+            == request.resource.data.email.trim().lower();
+      }
+
+      allow get: if signedIn();
+      allow list: if signedIn() && request.query.limit <= 30;
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && emailLowerOk();
+      allow delete: if false;
+    }
+
+    // Pre-auth "is this email taken?" lookup for the register screen
+    // (CLAUDE.md §9). Anyone may fetch a single doc by its exact id, but
+    // never list the collection. A signed-in user may only write the entry
+    // for their own Auth email, holding only their own uid. Update is
+    // allowed so an entry left behind by a deleted account can be reclaimed.
+    match /emailIndex/{email} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if request.auth != null
+        && request.auth.token.email != null
+        && email == request.auth.token.email.lower()
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // Projects (CLAUDE.md decisions 1 and 3). A user's role in a project
+    // is `members[uid]` ("leader" = Admin, "member" = Member). Members of
+    // a project may read it; only its Admins may change or delete it.
+    match /projects/{projectId} {
+      function isProjectMember() {
+        return signedIn() && request.auth.uid in resource.data.memberIds;
+      }
+
+      function isProjectLeader() {
+        return signedIn()
+          && resource.data.members.get(request.auth.uid, '') == 'leader';
+      }
+
+      // Shape shared by create and update.
+      function validProject(d) {
+        return d.keys().hasOnly(['name', 'description', 'startDate',
+            'deadline', 'status', 'createdBy', 'members', 'memberIds',
+            'createdAt', 'updatedAt'])
+          && d.name is string && d.name.size() > 0 && d.name.size() <= 100
+          && d.description is string && d.description.size() <= 500
+          && d.startDate is timestamp && d.deadline is timestamp
+          && d.deadline > d.startDate
+          && d.status in ['active', 'archived']
+          && d.members is map && d.memberIds is list
+          // memberIds is exactly the keys of members, no duplicates.
+          && d.memberIds.size() == d.members.size()
+          && d.memberIds.toSet() == d.members.keys().toSet()
+          && d.members.values().toSet().hasOnly(['leader', 'member']);
+      }
+
+      allow read: if isProjectMember();
+
+      // Only users whose default role is Admin may create projects, and
+      // only with themselves as the sole member and Admin.
+      allow create: if signedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid))
+          .data.defaultRole == 'leader'
+        && validProject(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.memberIds == [request.auth.uid]
+        && request.resource.data.members[request.auth.uid] == 'leader'
+        && request.resource.data.status == 'active'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      // Admins edit details, archive/restore and add/remove members. The
+      // creator always stays an Admin and can't be removed.
+      allow update: if isProjectLeader()
+        && validProject(request.resource.data)
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.members.get(resource.data.createdBy, '')
+          == 'leader'
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if isProjectLeader();
+
+      // Phase 2 only reads tasks, to refuse deleting a project that still
+      // has some. TODO(phase 3): task create/update rules.
+      match /tasks/{taskId} {
+        allow read: if signedIn() && request.auth.uid in
+          get(/databases/$(database)/documents/projects/$(projectId))
+            .data.memberIds;
+        allow write: if false;
+      }
+    }
+
+    // TODO(phase 3+): task writes, messages, leaveRequests, notifications.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

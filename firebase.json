@@ -1,0 +1,25 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "protrack-9c76f",
+          "appId": "1:485459398533:android:bd4cd5ddaa5c33b6b43eec",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "protrack-9c76f",
+          "configurations": {
+            "android": "1:485459398533:android:bd4cd5ddaa5c33b6b43eec",
+            "web": "1:485459398533:web:f6e6f6e96135765db43eec"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}
