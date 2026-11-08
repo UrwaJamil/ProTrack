@@ -15,8 +15,20 @@ void main() {
     expect(computeProgress([done, done, done, TaskStatus.inProgress]), 75);
   });
 
-  test('blocked and in-progress count as not done', () {
-    expect(computeProgress([TaskStatus.blocked, TaskStatus.inProgress]), 0);
+  test('every status but completed counts as not done', () {
+    expect(
+      computeProgress([
+        TaskStatus.todo,
+        TaskStatus.inProgress,
+        TaskStatus.onHold,
+        TaskStatus.blocked,
+      ]),
+      0,
+    );
+    expect(
+      computeProgress([done, TaskStatus.onHold, TaskStatus.blocked, done]),
+      50,
+    );
   });
 
   test('rounds down, so only all-done reaches 100', () {

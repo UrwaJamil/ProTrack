@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/status_pill.dart';
 import '../../../core/widgets/state_views.dart';
+import '../../tasks/presentation/widgets/project_tasks_section.dart';
 import '../application/project_filters.dart';
 import '../application/project_permissions.dart';
 import '../application/projects_providers.dart';
@@ -16,10 +18,16 @@ import 'widgets/team_members_section.dart';
 /// `/member/projects/:id`). What's editable comes from the project's own
 /// `members` map, not the route: its Admins get Edit, "+ Add", member
 /// removal and the email search; everyone else gets the read-only view.
+/// [adminView] only says which dashboard's routes to link to.
 class ProjectDetailScreen extends ConsumerWidget {
-  const ProjectDetailScreen({super.key, required this.projectId});
+  const ProjectDetailScreen({
+    super.key,
+    required this.projectId,
+    this.adminView = false,
+  });
 
   final String projectId;
+  final bool adminView;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -67,17 +75,26 @@ class ProjectDetailScreen extends ConsumerWidget {
                 title: 'Project not found',
                 message: 'It may have been deleted.',
               )
-            : _Details(project: project, permissions: permissions!),
+            : _Details(
+                project: project,
+                permissions: permissions!,
+                adminView: adminView,
+              ),
       ),
     );
   }
 }
 
 class _Details extends ConsumerStatefulWidget {
-  const _Details({required this.project, required this.permissions});
+  const _Details({
+    required this.project,
+    required this.permissions,
+    required this.adminView,
+  });
 
   final Project project;
   final ProjectPermissions permissions;
+  final bool adminView;
 
   @override
   ConsumerState<_Details> createState() => _DetailsState();
@@ -132,6 +149,12 @@ class _DetailsState extends ConsumerState<_Details> {
               project: project,
               progress: progress,
               today: today,
+            ),
+            const SizedBox(height: 24),
+            ProjectTasksSection(
+              project: project,
+              uid: permissions.uid,
+              adminView: widget.adminView,
             ),
             const SizedBox(height: 24),
             TeamMembersSection(

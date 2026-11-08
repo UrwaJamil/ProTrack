@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/status_pill.dart';
 import '../../../core/widgets/state_views.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../application/project_permissions.dart';
@@ -10,7 +11,6 @@ import '../data/project.dart';
 import '../data/project_repository.dart';
 import 'widgets/project_danger_zone.dart';
 import 'widgets/project_form_fields.dart';
-import 'widgets/project_status_badge.dart';
 
 /// Create (no [projectId]) or edit a project — Admin only (FR-2.1, FR-2.3).
 /// Editing is offered only to the project's own Admins; Firestore rules

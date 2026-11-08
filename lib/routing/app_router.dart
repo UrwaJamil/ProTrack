@@ -13,16 +13,16 @@ import '../features/common/splash_screen.dart';
 import '../features/leader/screens/analytics_screen.dart';
 import '../features/leader/screens/calendar_screen.dart';
 import '../features/leader/screens/leave_requests_screen.dart';
-import '../features/leader/screens/task_detail_screen.dart' as leader;
 import '../features/leader/screens/team_members_screen.dart';
-import '../features/member/screens/my_tasks_screen.dart';
 import '../features/member/screens/project_chat_screen.dart';
 import '../features/member/screens/request_leave_screen.dart';
-import '../features/member/screens/task_detail_screen.dart' as member;
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/projects/presentation/project_detail_screen.dart';
 import '../features/projects/presentation/project_form_screen.dart';
 import '../features/projects/presentation/projects_overview_screen.dart';
+import '../features/tasks/presentation/my_tasks_screen.dart';
+import '../features/tasks/presentation/task_detail_screen.dart';
+import '../features/tasks/presentation/task_form_screen.dart';
 import '../navigation/leader_shell.dart';
 import '../navigation/member_shell.dart';
 import 'router_refresh.dart';
@@ -76,8 +76,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/leader/projects/:projectId',
-        builder: (context, state) =>
-            ProjectDetailScreen(projectId: state.pathParameters['projectId']!),
+        builder: (context, state) => ProjectDetailScreen(
+          projectId: state.pathParameters['projectId']!,
+          adminView: true,
+        ),
         routes: [
           GoRoute(
             path: 'edit',
@@ -85,12 +87,27 @@ final routerProvider = Provider<GoRouter>((ref) {
               projectId: state.pathParameters['projectId']!,
             ),
           ),
+          // Before 'tasks/:taskId' so "new" isn't read as an id.
+          GoRoute(
+            path: 'tasks/new',
+            builder: (context, state) =>
+                TaskFormScreen(projectId: state.pathParameters['projectId']!),
+          ),
           GoRoute(
             path: 'tasks/:taskId',
-            builder: (context, state) => leader.TaskDetailScreen(
+            builder: (context, state) => TaskDetailScreen(
               projectId: state.pathParameters['projectId']!,
               taskId: state.pathParameters['taskId']!,
             ),
+            routes: [
+              GoRoute(
+                path: 'edit',
+                builder: (context, state) => TaskFormScreen(
+                  projectId: state.pathParameters['projectId']!,
+                  taskId: state.pathParameters['taskId']!,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -101,7 +118,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: 'tasks/:taskId',
-            builder: (context, state) => member.TaskDetailScreen(
+            builder: (context, state) => TaskDetailScreen(
               projectId: state.pathParameters['projectId']!,
               taskId: state.pathParameters['taskId']!,
             ),

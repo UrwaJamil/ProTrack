@@ -1,0 +1,17 @@
+{
+  "name": "protrack-firestore-rules-tests",
+  "private": true,
+  "description": "Emulator tests for ../firestore.rules (CLAUDE.md decision 3).",
+  "scripts": {
+    "test": "firebase emulators:exec --config ../firebase.json --only firestore --project demo-protrack \"mocha\""
+  },
+  "mocha": {
+    "spec": "test/**/*.test.js",
+    "timeout": 15000
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "5.0.2",
+    "firebase": "12.19.0",
+    "mocha": "11.8.0"
+  }
+}

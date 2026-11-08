@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/data/app_user.dart';
 import '../../auth/data/user_repository.dart';
+import '../../tasks/application/tasks_providers.dart';
 import '../data/project.dart';
 import '../data/project_repository.dart';
 import 'progress.dart';
@@ -28,12 +29,13 @@ final projectProvider = StreamProvider.family<Project?, String>(
   (ref, id) => ref.watch(projectRepositoryProvider).watchProject(id),
 );
 
-/// FR-2.5 progress for a project. Tasks arrive in Phase 3; until then every
-/// project has no tasks, which [computeProgress] defines as 0%.
-// TODO(phase 3): feed the project's task statuses in here.
-final projectProgressProvider = Provider.family<int, String>(
-  (ref, projectId) => computeProgress(const []),
-);
+/// FR-2.5 progress for a project, from its live task statuses. 0% while
+/// the tasks are still loading (or failed to load), and for a project with
+/// no tasks.
+final projectProgressProvider = Provider.family<int, String>((ref, projectId) {
+  final tasks = ref.watch(projectTasksProvider(projectId)).value ?? const [];
+  return computeProgress(tasks.map((t) => t.status));
+});
 
 class ProjectFilterController extends Notifier<ProjectFilter> {
   @override

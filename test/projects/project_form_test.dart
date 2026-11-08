@@ -9,8 +9,10 @@ import 'package:team_project_manager/features/projects/data/project.dart';
 import 'package:team_project_manager/features/projects/data/project_repository.dart';
 import 'package:team_project_manager/features/projects/presentation/project_form_screen.dart';
 import 'package:team_project_manager/features/projects/presentation/widgets/project_form_fields.dart';
+import 'package:team_project_manager/features/tasks/data/task_repository.dart';
 
 import '../support/fake_projects.dart';
+import '../support/fake_tasks.dart';
 import '../support/finders.dart';
 import '../support/project_fixtures.dart';
 
@@ -51,6 +53,7 @@ Future<GoRouter> _pumpForm(
     ProviderScope(
       overrides: [
         projectRepositoryProvider.overrideWithValue(repo),
+        taskRepositoryProvider.overrideWithValue(FakeTaskRepository()),
         currentUidProvider.overrideWithValue(uid),
       ],
       child: MaterialApp.router(

@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/widgets/status_pill.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/widgets/user_avatar.dart';
 import '../../../auth/data/app_user.dart';
 import '../../application/project_permissions.dart';
+import '../../../tasks/application/tasks_providers.dart';
 import '../../application/projects_providers.dart';
 import '../../data/project.dart';
 import '../../data/project_repository.dart';
-import 'project_status_badge.dart';
 
 /// "Team Members (N)" with "+ Add" for Admins, and one row per member:
 /// Admins show a lock (they can't be removed); Members show a remove
@@ -100,6 +101,18 @@ class TeamMembersSection extends ConsumerWidget {
   }
 }
 
+/// The remove-member confirmation, mentioning how many of the project's
+/// tasks they'll be unassigned from.
+String removeMemberMessage(String projectName, int assignedTasks) {
+  final unassign = switch (assignedTasks) {
+    0 => '',
+    1 => ' and be unassigned from 1 task',
+    final n => ' and be unassigned from $n tasks',
+  };
+  return 'They will lose access to "$projectName"$unassign. '
+      'You can add them again later.';
+}
+
 class _MemberRow extends ConsumerWidget {
   const _MemberRow({
     required this.uid,
@@ -163,14 +176,14 @@ class _MemberRow extends ConsumerWidget {
 
   Future<void> _remove(BuildContext context, WidgetRef ref, String name) async {
     final messenger = ScaffoldMessenger.of(context);
+    final assigned = (ref.read(projectTasksProvider(project.id)).value ?? [])
+        .where((t) => t.isAssignedTo(uid))
+        .length;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Remove $name?'),
-        content: Text(
-          'They will lose access to "${project.name}". You can add them '
-          'again later.',
-        ),
+        content: Text(removeMemberMessage(project.name, assigned)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),

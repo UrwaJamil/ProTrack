@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'project_status_badge.dart';
+import '../../../../core/widgets/status_pill.dart';
 
 /// "Projects" + "Admin View" badge, or "My Projects" for Members.
 class ProjectsHeader extends StatelessWidget {

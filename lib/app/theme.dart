@@ -35,8 +35,8 @@ class AppPalette {
 
 /// Design-system colors with no home on [ColorScheme]: the AppBar/nav
 /// chrome, dialog/dropdown surfaces, text field styling, the progress bar,
-/// success/warning, and per-status task badges (To Do / In Progress /
-/// Blocked / Completed / Overdue).
+/// success/warning, and per-status task badges (Not Started / In Progress
+/// / On Hold / Blocked / Completed / Overdue).
 ///
 /// Access via `Theme.of(context).appColors`.
 @immutable
@@ -67,6 +67,8 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.statusToDoText,
     required this.statusInProgressBackground,
     required this.statusInProgressText,
+    required this.statusOnHoldBackground,
+    required this.statusOnHoldText,
     required this.statusBlockedBackground,
     required this.statusBlockedText,
     required this.statusCompletedBackground,
@@ -111,6 +113,11 @@ class AppColors extends ThemeExtension<AppColors> {
   final Color statusToDoText;
   final Color statusInProgressBackground;
   final Color statusInProgressText;
+
+  /// On Hold: a navy tint, distinct from Not Started's grey and In
+  /// Progress's accent blue.
+  final Color statusOnHoldBackground;
+  final Color statusOnHoldText;
   final Color statusBlockedBackground;
   final Color statusBlockedText;
   final Color statusCompletedBackground;
@@ -153,6 +160,8 @@ class AppColors extends ThemeExtension<AppColors> {
     statusToDoText: AppPalette.textSecondaryLight,
     statusInProgressBackground: AppPalette.accentLight.withValues(alpha: 0.14),
     statusInProgressText: AppPalette.accentLight,
+    statusOnHoldBackground: AppPalette.primaryLight.withValues(alpha: 0.10),
+    statusOnHoldText: AppPalette.primaryLight,
     statusBlockedBackground: AppPalette.warningLight.withValues(alpha: 0.12),
     statusBlockedText: AppPalette.warningLight,
     statusCompletedBackground: AppPalette.successLight.withValues(alpha: 0.12),
@@ -188,6 +197,8 @@ class AppColors extends ThemeExtension<AppColors> {
     statusToDoText: AppPalette.textSecondaryDark,
     statusInProgressBackground: AppPalette.accentDark.withValues(alpha: 0.16),
     statusInProgressText: AppPalette.accentDark,
+    statusOnHoldBackground: AppPalette.primaryDark.withValues(alpha: 0.28),
+    statusOnHoldText: AppPalette.textPrimaryDark,
     statusBlockedBackground: AppPalette.warningDark.withValues(alpha: 0.14),
     statusBlockedText: AppPalette.warningDark,
     statusCompletedBackground: AppPalette.successDark.withValues(alpha: 0.14),
@@ -223,6 +234,8 @@ class AppColors extends ThemeExtension<AppColors> {
     Color? statusToDoText,
     Color? statusInProgressBackground,
     Color? statusInProgressText,
+    Color? statusOnHoldBackground,
+    Color? statusOnHoldText,
     Color? statusBlockedBackground,
     Color? statusBlockedText,
     Color? statusCompletedBackground,
@@ -257,6 +270,9 @@ class AppColors extends ThemeExtension<AppColors> {
       statusInProgressBackground:
           statusInProgressBackground ?? this.statusInProgressBackground,
       statusInProgressText: statusInProgressText ?? this.statusInProgressText,
+      statusOnHoldBackground:
+          statusOnHoldBackground ?? this.statusOnHoldBackground,
+      statusOnHoldText: statusOnHoldText ?? this.statusOnHoldText,
       statusBlockedBackground:
           statusBlockedBackground ?? this.statusBlockedBackground,
       statusBlockedText: statusBlockedText ?? this.statusBlockedText,
@@ -302,6 +318,11 @@ class AppColors extends ThemeExtension<AppColors> {
         other.statusInProgressBackground,
       ),
       statusInProgressText: l(statusInProgressText, other.statusInProgressText),
+      statusOnHoldBackground: l(
+        statusOnHoldBackground,
+        other.statusOnHoldBackground,
+      ),
+      statusOnHoldText: l(statusOnHoldText, other.statusOnHoldText),
       statusBlockedBackground: l(
         statusBlockedBackground,
         other.statusBlockedBackground,

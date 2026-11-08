@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app/theme.dart';
 import '../../../../core/utils/date_format.dart';
+import '../../../../core/widgets/days_left_pill.dart';
 import '../../application/project_filters.dart';
 import '../../data/project.dart';
 import 'project_progress_bar.dart';
@@ -66,7 +66,7 @@ class ProjectSummaryCard extends StatelessWidget {
                   ],
                 ),
                 if (!project.isArchived)
-                  _DaysPill(
+                  DaysLeftPill(
                     days: daysRemaining(project.deadline, today),
                     overdue: overdue,
                   ),
@@ -75,50 +75,6 @@ class ProjectSummaryCard extends StatelessWidget {
             const SizedBox(height: 16),
             ProjectProgressBar(progress: progress, overdue: overdue),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DaysPill extends StatelessWidget {
-  const _DaysPill({required this.days, required this.overdue});
-
-  final int days;
-  final bool overdue;
-
-  String get _label {
-    if (days < 0) {
-      return overdue
-          ? '${-days} ${days == -1 ? 'day' : 'days'} overdue'
-          : 'Deadline passed';
-    }
-    if (days == 0) return 'Due today';
-    return '$days ${days == 1 ? 'day' : 'days'} left';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final (bg, fg) = overdue
-        ? (
-            theme.colorScheme.error.withValues(alpha: 0.12),
-            theme.colorScheme.error,
-          )
-        : (theme.appColors.chipBackground, theme.appColors.chipText);
-    return Container(
-      height: 24,
-      padding: const EdgeInsets.symmetric(horizontal: 9),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        _label,
-        style: theme.textTheme.labelMedium?.copyWith(
-          color: fg,
-          fontWeight: FontWeight.w700,
         ),
       ),
     );

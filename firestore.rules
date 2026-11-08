@@ -98,17 +98,106 @@ service cloud.firestore {
 
       allow delete: if isProjectLeader();
 
-      // Phase 2 only reads tasks, to refuse deleting a project that still
-      // has some. TODO(phase 3): task create/update rules.
+      // Tasks (CLAUDE.md decision 3, Phase 3). Project members read every
+      // task; project Admins create, edit, reassign and delete; an
+      // assignee may change only status / helpNote / subtasks /
+      // attachments on their own task. Nothing is writable while the
+      // project is archived.
       match /tasks/{taskId} {
-        allow read: if signedIn() && request.auth.uid in
-          get(/databases/$(database)/documents/projects/$(projectId))
-            .data.memberIds;
-        allow write: if false;
+        function project() {
+          return get(/databases/$(database)/documents/projects/$(projectId))
+            .data;
+        }
+
+        function isMember() {
+          return signedIn() && request.auth.uid in project().memberIds;
+        }
+
+        function isLeader() {
+          return signedIn()
+            && project().members.get(request.auth.uid, '') == 'leader';
+        }
+
+        function projectActive() {
+          return project().status == 'active';
+        }
+
+        function validStatus(s) {
+          return s in ['todo', 'in_progress', 'on_hold', 'blocked',
+            'completed'];
+        }
+
+        // Shape shared by create and update. Subtask entries can't be
+        // checked one by one (rules have no loops), only the list size.
+        // An empty assignedTo is allowed so removing a task's only
+        // assignee from the project still works; the app's form requires
+        // at least one.
+        function validTask(d) {
+          return d.keys().hasOnly(['title', 'description', 'assignedTo',
+              'priority', 'status', 'deadline', 'helpNote', 'subtasks',
+              'attachments', 'createdBy', 'createdAt', 'updatedAt'])
+            && d.keys().hasAll(['title', 'description', 'assignedTo',
+              'priority', 'status', 'deadline', 'subtasks', 'createdBy',
+              'createdAt', 'updatedAt'])
+            && d.title is string && d.title.size() > 0
+            && d.title.size() <= 100
+            && d.description is string && d.description.size() <= 2000
+            && d.assignedTo is list
+            && d.assignedTo.toSet().size() == d.assignedTo.size()
+            && d.assignedTo.toSet().hasOnly(project().memberIds)
+            && d.priority in ['high', 'medium', 'low']
+            && validStatus(d.status)
+            && d.deadline is timestamp
+            && d.subtasks is list && d.subtasks.size() <= 50;
+        }
+
+        function leaderUpdate() {
+          return isLeader() && projectActive()
+            && validTask(request.resource.data)
+            && request.resource.data.createdBy == resource.data.createdBy
+            && request.resource.data.createdAt == resource.data.createdAt
+            && request.resource.data.updatedAt == request.time;
+        }
+
+        // FR-3.5 / FR-3.6: the assignee ticks subtasks (same count) and
+        // changes status, nothing else.
+        function assigneeUpdate() {
+          return isMember() && projectActive()
+            && request.auth.uid in resource.data.assignedTo
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'helpNote', 'subtasks', 'attachments',
+                'updatedAt'])
+            && request.resource.data.updatedAt == request.time
+            && validStatus(request.resource.data.status)
+            && request.resource.data.subtasks is list
+            && request.resource.data.subtasks.size()
+              == resource.data.subtasks.size();
+        }
+
+        allow read: if isMember();
+
+        allow create: if isLeader() && projectActive()
+          && validTask(request.resource.data)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if leaderUpdate() || assigneeUpdate();
+
+        allow delete: if isLeader() && projectActive();
       }
     }
 
-    // TODO(phase 3+): task writes, messages, leaveRequests, notifications.
+    // "My Tasks" (FR-3.4): a collection-group query over every project's
+    // tasks, which must filter `assignedTo array-contains <own uid>`.
+    // Removing someone from a project unassigns them from its tasks in
+    // the same transaction, so this doesn't outlive membership.
+    match /{path=**}/tasks/{taskId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.assignedTo;
+    }
+
+    // TODO(phase 4+): comments, history, messages, leaveRequests,
+    // notifications.
     match /{document=**} {
       allow read, write: if false;
     }

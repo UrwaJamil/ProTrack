@@ -9,11 +9,16 @@ import 'package:team_project_manager/features/projects/application/projects_prov
 import 'package:team_project_manager/features/projects/data/project_repository.dart';
 import 'package:team_project_manager/features/projects/presentation/project_detail_screen.dart';
 import 'package:team_project_manager/features/projects/presentation/widgets/assign_member_search.dart';
+import 'package:team_project_manager/features/projects/presentation/widgets/team_members_section.dart';
+import 'package:team_project_manager/features/tasks/data/task.dart';
+import 'package:team_project_manager/features/tasks/data/task_repository.dart';
 
 import '../support/fake_auth.dart';
 import '../support/fake_projects.dart';
+import '../support/fake_tasks.dart';
 import '../support/finders.dart';
 import '../support/project_fixtures.dart';
+import '../support/task_fixtures.dart';
 
 FakeUserRepository _users() {
   final users = FakeUserRepository();
@@ -38,6 +43,7 @@ FakeUserRepository _users() {
 Future<FakeProjectRepository> _pump(
   WidgetTester tester, {
   required String uid,
+  List<Task> tasks = const [],
 }) async {
   tester.view.physicalSize = const Size(800, 1600);
   tester.view.devicePixelRatio = 1;
@@ -47,6 +53,7 @@ Future<FakeProjectRepository> _pump(
     ProviderScope(
       overrides: [
         projectRepositoryProvider.overrideWithValue(repo),
+        taskRepositoryProvider.overrideWithValue(FakeTaskRepository(tasks)),
         userRepositoryProvider.overrideWithValue(_users()),
         currentUidProvider.overrideWithValue(uid),
         todayProvider.overrideWithValue(DateTime(2026, 10, 15)),
@@ -108,6 +115,44 @@ void main() {
     expect(repo.calls, ['removeMember:member1']);
     expect(repo.projects['abcd1234']!.members.keys, ['admin']);
     expect(find.text('Mo Member'), findsNothing);
+  });
+
+  testWidgets('the remove dialog says how many tasks they lose', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      uid: 'admin',
+      tasks: [
+        testTask(id: 't1'),
+        testTask(id: 't2'),
+        testTask(id: 't3', assignedTo: const ['admin']),
+      ],
+    );
+    final remove = find.byIcon(Icons.person_remove_outlined);
+    await tester.ensureVisible(remove);
+    await tester.pumpAndSettle();
+    await tester.tap(remove);
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'They will lose access to "Mobile App Redesign" and be unassigned '
+        'from 2 tasks. You can add them again later.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  test('removeMemberMessage', () {
+    expect(
+      removeMemberMessage('P', 0),
+      'They will lose access to "P". You can add them again later.',
+    );
+    expect(
+      removeMemberMessage('P', 1),
+      'They will lose access to "P" and be unassigned from 1 task. '
+      'You can add them again later.',
+    );
   });
 
   group('Assign Team Member search', () {

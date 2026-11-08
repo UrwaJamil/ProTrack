@@ -110,16 +110,41 @@ class ProjectRepository {
   Future<void> addMember(String projectId, String uid) =>
       _changeMembers(projectId, (project) => addMemberChange(project, uid));
 
-  Future<void> removeMember(String projectId, String uid) =>
-      _changeMembers(projectId, (project) => removeMemberChange(project, uid));
+  /// Removes Member [uid] and, in the same transaction, unassigns them
+  /// from every task in the project — otherwise they'd keep seeing those
+  /// tasks under My Tasks. The tasks are looked up just before the
+  /// transaction (client transactions can't run queries); a task assigned
+  /// to them in that instant would keep a stale assignee, which the rules
+  /// leave powerless (writes require project membership).
+  Future<void> removeMember(String projectId, String uid) async {
+    final assigned = await _projects
+        .doc(projectId)
+        .collection('tasks')
+        .where('assignedTo', arrayContains: uid)
+        .get();
+    await _changeMembers(
+      projectId,
+      (project) => removeMemberChange(project, uid),
+      alsoUpdate: (tx) {
+        for (final task in assigned.docs) {
+          tx.update(task.reference, {
+            'assignedTo': FieldValue.arrayRemove([uid]),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      },
+    );
+  }
 
   /// Read-modify-write in a transaction so concurrent changes by two
   /// Admins can't drop each other's edits; `members` and `memberIds` are
-  /// always written together.
+  /// always written together. [alsoUpdate] adds writes to the same
+  /// transaction.
   Future<void> _changeMembers(
     String projectId,
-    MemberChange Function(Project project) change,
-  ) => _firestore.runTransaction((tx) async {
+    MemberChange Function(Project project) change, {
+    void Function(Transaction tx)? alsoUpdate,
+  }) => _firestore.runTransaction((tx) async {
     final ref = _projects.doc(projectId);
     final snap = await tx.get(ref);
     final data = snap.data();
@@ -130,5 +155,6 @@ class ProjectRepository {
       'memberIds': next.memberIds,
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    alsoUpdate?.call(tx);
   });
 }

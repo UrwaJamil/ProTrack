@@ -10,9 +10,11 @@ import 'package:team_project_manager/features/projects/data/project.dart';
 import 'package:team_project_manager/features/projects/data/project_repository.dart';
 import 'package:team_project_manager/features/projects/presentation/projects_overview_screen.dart';
 import 'package:team_project_manager/features/projects/presentation/widgets/project_card_skeleton.dart';
+import 'package:team_project_manager/features/tasks/data/task_repository.dart';
 
 import '../support/fake_auth.dart';
 import '../support/fake_projects.dart';
+import '../support/fake_tasks.dart';
 import '../support/project_fixtures.dart';
 
 Widget _app({
@@ -34,6 +36,7 @@ Widget _app({
   return ProviderScope(
     overrides: [
       projectRepositoryProvider.overrideWithValue(projects),
+      taskRepositoryProvider.overrideWithValue(FakeTaskRepository()),
       userRepositoryProvider.overrideWithValue(users),
       currentUidProvider.overrideWithValue(uid),
       todayProvider.overrideWithValue(DateTime(2026, 10, 15)),

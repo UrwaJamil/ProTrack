@@ -50,9 +50,14 @@ If `docs/SPEC.md` contains FR-numbered requirements (e.g. FR-1.1, FR-2.3), treat
      - **Update:** only by a project leader. `createdBy` and `createdAt` are immutable, the creator stays `"leader"`, `memberIds` must equal the keys of `members` (no duplicates), roles are only `leader`/`member`, `deadline > startDate`, name 1–100 chars, description ≤500.
      - **Delete:** only a project leader. The app also refuses while the project has tasks; rules can't count a subcollection, and Firestore never cascades.
      - **`members` and `memberIds`** are always written together, in one transaction (`ProjectRepository.addMember` / `removeMember`).
-     - **Tasks:** project members may read them (for the delete check); task writes come in Phase 3.
+   - **Tasks (Phase 3, `projects/{pid}/tasks/{tid}`):**
+     - **Read:** project members; plus a `{path=**}/tasks` collection-group rule letting anyone read tasks whose `assignedTo` contains their uid (My Tasks must filter `assignedTo array-contains uid`).
+     - **Create/delete:** project leader of an active project. Create checks allowed keys, title 1–100, description ≤2000, priority/status values, `assignedTo` ⊆ project `memberIds` with no duplicates, `createdBy == uid`, server timestamps, ≤50 subtasks.
+     - **Update:** a leader edits anything but `createdBy`/`createdAt` (same validation); an assignee who is still a project member may change only `status`, `helpNote`, `subtasks`, `attachments` (+ `updatedAt == request.time`), keeping the subtask count. Nothing is writable while the project is archived. Rules can't loop, so they can't prove an assignee only flipped `done` — the app only toggles it (`setSubtaskDone`, in a transaction).
+     - **Admin edits never write `status`** (`TaskDraft.toMap(includeStatus: false)`), so a stale edit form can't overwrite an assignee's change; status goes through the status selector.
+     - **Removing a member** also removes them from that project's tasks' `assignedTo`, in the same transaction (`ProjectRepository.removeMember`); the confirm dialog shows the count.
    - **Users:** any signed-in user may `get` a profile. `list` queries must set `limit <= 30` (the email search, avatar `whereIn` lookups), which makes bulk scraping harder. `emailLower`, when present, must equal `email.trim().lower()`.
-   - **Deploying:** `firebase.json` points at `firestore.rules`, so `firebase deploy --only firestore:rules` works. Emulator tests for the rules arrive with Phase 3; until then, verify by hand in the console's Rules Playground.
+   - **Deploying:** `firebase.json` points at `firestore.rules`, so `firebase deploy --only firestore:rules` works. `firestore.indexes.json` holds the My Tasks index (`firebase deploy --only firestore:indexes`). Rules emulator tests live in `firestore-tests/` (`npm install` once, then `npm test` there; needs Java 21+).
 4. **Chat messages live in a subcollection** (`projects/{id}/messages`), never an array in a document. One chat per project, chat id = project id.
 5. **Task comments and history** are subcollections of the task (`comments`, `history`).
 6. **Leave**: `leaveRequests` collection; an approved request in the current date range shows the "On Leave" badge (computed on read, not stored as a flag).
@@ -120,7 +125,7 @@ If `docs/SPEC.md` contains FR-numbered requirements (e.g. FR-1.1, FR-2.3), treat
       - Overdue is computed on read: active, deadline day passed, progress < 100.
       - Filter chips: All = non-archived, split into Active + Overdue; Archived is counted separately.
       - The Admin's "My Projects" = projects they're a member of but didn't create.
-      - Progress is `computeProgress(taskStatuses)` (FR-2.5), 0% until Phase 3 feeds real task statuses into `projectProgressProvider`.
+      - Progress is `computeProgress(taskStatuses)` (FR-2.5): `projectProgressProvider` reads the project's live tasks (`projectTasksProvider`); only `completed` counts as done; 0% while loading or with no tasks.
 
 ## Data model (Firestore)
 
@@ -129,7 +134,7 @@ emailIndex/{lowercasedEmail} uid (written with users/{uid}; see decision 9)
 projects/{pid} name, description, startDate, deadline, status(active|archived),
 createdBy, members{uid: role}, memberIds[], createdAt, updatedAt
 projects/{pid}/tasks/{tid} title, description, assignedTo[], priority(high|medium|low),
-status(todo|in_progress|blocked|completed), deadline,
+status(todo|in_progress|on_hold|blocked|completed), deadline,
 helpNote{text, taggedUserId?, taggedSkill?}, subtasks[{title,done}],
 attachments[], createdBy, createdAt, updatedAt
 projects/{pid}/tasks/{tid}/comments/{cid}
@@ -140,7 +145,9 @@ notifications/{nid} userId, type, projectId?, taskId?, message, read, createdAt
 
 Note: `users.emailLower` (= `email.trim().toLowerCase()`) is the "Assign Team Member" prefix-search key. It's written at signup and back-filled on the next sign-in for older profiles. The query `orderBy('emailLower').startAt([q]).endAt([q+'']).limit(10)` uses Firestore's automatic single-field index, so it needs no composite index. The project list query (`memberIds array-contains uid`) is sorted in the app, so it needs no index either.
 
-Note: tasks are a subcollection of the project (not top-level) so rules and queries stay simple. Use a `collectionGroup` query for "My Tasks across all projects" (needs a composite index — Claude Code should tell me the exact index to create).
+Note: tasks are a subcollection of the project (not top-level) so rules and queries stay simple. "My Tasks across all projects" is `collectionGroup('tasks').where('assignedTo', arrayContains: uid)`, sorted in the app, so it needs no composite index — only a collection-group single-field index (Arrays / array-contains) on `tasks.assignedTo`, defined in `firestore.indexes.json`.
+
+Note — task status display vs. stored (FR-3.6): `TaskStatus.label` bridges them like `UserRole.label`: `todo` → "Not Started", `in_progress` → "In Progress", `on_hold` → "On Hold", `completed` → "Completed". `blocked` ("Blocked") is a separate "needs help" state reserved for Phase 4's help-note flow, so it isn't in `TaskStatus.choosable` yet. On Hold has its own badge colors (`statusOnHold*` in `AppColors`). Overdue (computed on read): deadline day passed and not completed.
 
 ## Build phases (do ONE phase at a time, stop after each)
 | # | Phase | Done when |

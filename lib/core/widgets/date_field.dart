@@ -36,7 +36,13 @@ class _DateFieldState extends State<DateField> {
   @override
   void didUpdateWidget(DateField old) {
     super.didUpdateWidget(old);
-    if (old.value != widget.value) _controller.text = _text(widget.value);
+    if (old.value != widget.value) {
+      // Setting the text notifies the enclosing Form, which must not be
+      // marked dirty mid-build — sync once this frame is done.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _controller.text = _text(widget.value);
+      });
+    }
   }
 
   @override

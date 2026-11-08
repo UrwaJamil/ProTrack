@@ -61,3 +61,5 @@ serviceAccountKey.json
 
 # Claude Code local settings (CLAUDE.md and README.md stay committed)
 .claude/settings.local.json
+# Rules tests (firestore-tests/)
+firestore-tests/node_modules/
