@@ -1,79 +1,135 @@
 # ProTrack build plan (Phases 4 – 9)
 
 > **ADD-ONLY RULE:** never modify or delete files that exist in origin/main. New screens go in new files using the existing theme and widgets. The only allowed edits to existing files are additive (new routes, rules for new collections, pubspec dependencies), each shown to me as a diff and approved first. CLAUDE.md is read-only.
+>
+> **Exceptions (approved 2026-11-13):**
+> - **Placeholders are unfinished work.** The `build` body of a placeholder screen may be replaced (Notifications, Analytics, Calendar, Leave Management, Team, member Leave). Its file name, class name, constructor and route stay exactly as they are. The diff is shown before the edit.
+> - **Task Details** (`task_detail_screen.dart`) gets exactly one addition: an entry button that opens the new Comments / History screen. The diff is shown before the edit.
+> - **Profile** (`profile_screen.dart`, `profile_settings_section.dart`, `skill_tags_editor.dart`) is built and is **not touched**. See "Profile: mock vs. current" below.
 
 Source of truth: `design/screens/*.jpg` (screenshots = spec) plus the decisions in `CLAUDE.md`. Requirements not cited in existing code are marked **FR unknown**.
 
-Build order: **4 → 6 → 8 → 7 → 9**. One phase at a time; each ships model + repository + Firestore rules + emulator tests + UI, and is done only when `flutter analyze`, `flutter test` and (if rules changed) `firestore-tests` `npm test` all pass. Every phase also adds its new screens to the dev preview (`lib/dev_preview/`).
+Build order: **4 → 6 → 8 → 7 → 9**. One phase at a time; each ships model + repository + Firestore rules for new collections + emulator tests + UI, and is done only when `flutter analyze`, `flutter test` and `firestore-tests` `npm test` all pass. Every new screen is also added to the dev preview (`lib/dev_preview/`). Any edit to an existing file is shown as a diff first. Stop after each phase.
 
-Environment: Flutter 3.47.1 / Dart 3.13.1 at `C:\src\flutter`. Rules tests need **JDK 21** (only Java 1.8 found so far).
+Environment: Flutter 3.47.1 / Dart 3.13.1 at `C:\src\flutter`. Rules tests need **JDK 21**: Temurin 21.0.13 at `C:\Program Files\Eclipse Adoptium\jdk-21.0.13.9-hotspot` (set `JAVA_HOME` to it if Java 8 is picked up). Verified 2026-11-13: `firestore-tests` `npm test` → 30 passing.
 
-Under the add-only rule, existing screens (Task detail, the Team / Calendar / Leave / Profile tabs, Analytics, Notifications placeholders), existing repositories, models and widgets stay exactly as they are. New screens are reached through **new** routes; adding each route to `lib/routing/app_router.dart` is an additive diff shown for approval first.
+Apart from the exceptions above, existing screens, repositories, models and widgets stay exactly as they are. New screens are reached through **new** routes. Adding each route to `lib/routing/app_router.dart` is an additive diff, shown for approval first.
 
 ---
 
-## Phase 4 — Comments and history (FR unknown; screenshot 01)
+## Screen checklist
+
+Mock files are in `design/screens/`. Status values: Not started → In progress → Done (analyze + tests + rules tests pass, and the screen is in the dev preview).
+
+| Screen | Mock file | New or placeholder | Phase | Status |
+|---|---|---|---|---|
+| Task Comments + Task History (tabs "Comments (n)" / "History") | `01_member_task_notif_profile.jpg` | **New** screen + new route under the task; one entry button added to existing Task Details | 4 | Not started |
+| Need Help (opened from Comments/History) | `02_member_leave_help.jpg` | **New** screen + new route | 4 | Not started |
+| Leave (member) | `02_member_leave_help.jpg` | **Placeholder**: `RequestLeaveScreen` (`features/member/screens/request_leave_screen.dart`, `/member/leave`) | 6 | Not started |
+| Request Leave | `02_member_leave_help.jpg` | **New** screen + new route; class `LeaveRequestFormScreen` (`RequestLeaveScreen` is already the placeholder's name) | 6 | Not started |
+| Leave Management (admin) | `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `LeaveRequestsScreen` (`features/leader/screens/leave_requests_screen.dart`, `/leader/leave`) | 6 | Not started |
+| Team | `04_admin_team_calendar.jpg` | **Placeholder**: `TeamMembersScreen` (`features/leader/screens/team_members_screen.dart`, `/leader/team`) | 6 | Not started |
+| Member Profile (opened from Team) | `04_admin_team_calendar.jpg` | **New** screen + new route `/leader/team/:uid` | 6 | Not started |
+| Notifications (member + admin) | `01_member_task_notif_profile.jpg`, `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `NotificationsScreen` (`features/common/notifications_screen.dart`, `/notifications`) | 8 | Not started |
+| Calendar | `04_admin_team_calendar.jpg` | **Placeholder**: `CalendarScreen` (`features/leader/screens/calendar_screen.dart`, `/leader/calendar`) | 7 | Not started |
+| Analytics | `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `AnalyticsScreen` (`features/leader/screens/analytics_screen.dart`, `/leader/analytics`) | 9 | Not started |
+| Profile (member + admin) | `01_member_task_notif_profile.jpg`, `03_admin_leave_notif_analytics_profile.jpg` | **Existing, built. Not touched** (gaps listed below for your decision) | — | Built |
+
+---
+
+## Phase 4 — Comments, history, Need Help (FR unknown; screenshots 01, 02)
 
 **Model** (new files in `features/tasks/data/`)
 - `TaskComment {id, authorId, text, createdAt, editedAt?}`.
 - `TaskHistoryEntry {id, who, action, from?, to?, at}`.
 
-**Repository** (new file)
-- `TaskActivityRepository`: `watchComments`, `addComment`, `editComment`, `deleteComment`, `watchHistory(limit)` (paged).
+**Repository** (new files)
+- `TaskActivityRepository`: `watchComments`, `addComment`, `editComment`, `deleteComment`, `watchHistory(limit)` (paged), `addHistory`.
+- `HelpRequestRepository` (or a method on the new repository): writes `helpNote {text, taggedUserId?, taggedSkill?}` through a new code path. The existing `TaskRepository` stays untouched.
 
-**Rules** (additive, approved diff to `firestore.rules`): new `comments` and `history` subcollection matches as in CLAUDE.md decision 3.
+**Rules** (additive, approved diff to `firestore.rules`): new `comments` and `history` subcollection matches, as in CLAUDE.md decision 3. `helpNote` is already writable by assignees under the existing task rules.
 
 **UI** (new files)
-- A task activity screen (comments with composer, history list) at a new route under the task.
-- Widgets: `CommentTile`, `CommentComposer` (send only), `HistoryTile`.
+- Task activity screen: header (task id, title, status pill, project / sprint line), `PillToggle` tabs "Comments (n)" / "History", comment list with author avatar + role badge + time, composer with send (the attach icon is a stub until Storage exists), history list with "load more".
+- Need Help screen: info banner, related-task card, "What is blocking you?" (required, character counter), "Who can help?" list of the task's project members except me, least busy first (fewest active tasks), skill tags as subtitle (radio select; from Phase 6, people on approved leave today are excluded), sending sets the task to Blocked, Request Help button + "<name> will receive an immediate ping" caption.
+- Widgets: `CommentTile`, `CommentComposer`, `HistoryTile`, `HelperOptionTile`.
+- Existing Task Details: one entry button to the activity screen (diff first).
 
-**Tests:** model round-trips, widget tests for the composer; emulator: comments CRUD by author/leader/outsider, history create/no-update.
+**Tests:** model round-trips, helper-ranking unit test, composer widget test. Emulator: comments CRUD by author / leader / outsider; history create-only (no update or delete).
 
 ---
 
-## Phase 6 — Leave (FR unknown; screenshots 02, 03)
+## Phase 6 — Leave, Team, Member Profile (FR unknown; screenshots 02, 03, 04)
 
-**Model** (new, `features/leave/data/`): `LeaveRequest`, `LeaveType`, `LeaveStatus`, `LeaveSettings {allowances, holidays}`; pure `workingDaysBetween(from, to, holidays, halfDay)` and `LeaveBalance` calculators (unit-tested).
+**Model** (new, `features/leave/data/`): `LeaveRequest`, `LeaveType` (Sick / Casual / Emergency / Other), `LeaveStatus`, `LeaveSettings {allowances, holidays}`; pure `workingDaysBetween(from, to, holidays, halfDay)` and `LeaveBalance` calculators (unit-tested).
 
 **Proposed rules design (confirm at phase start; additive rules for the new `leaveRequests` / `settings` collections):**
 - On submit the app stores `approverIds` = leaders of the requester's projects, minus the requester. Approvers list Pending with `approverIds array-contains uid`.
-- Decisions must also name `decidedVia: projectId`; rules check `get(project).members[uid] == 'leader'` and the requester is in that project and `uid != userId`. So a forged `approverIds` entry can read the request but can't decide it.
+- A decision must also name `decidedVia: projectId`. Rules check that `get(project).members[uid] == 'leader'`, that the requester is in that project, and that `uid != userId`. So a forged `approverIds` entry can read the request but can't decide it.
 - Requester: create (pending, own uid, valid dates/type), read own, cancel own pending.
 
-**Screens / new routes** (new files under `features/leave/`)
-- Leave overview (stats, Request Leave button, My requests; Pending/History management for Admins).
-- Request Leave (chips, dates, half-day toggle for single day, reason, total days, balance banner).
-- Leave detail (+ Cancel when pending).
-- Leave settings (allowances + holidays editor).
-- Member Profile (`/leader/team/:uid`, read-only skills, current tasks, Add to project via the existing `ProjectRepository.addMember`).
+**Screens**
+- Leave (member), filling the placeholder `RequestLeaveScreen`: Used / Remaining / Pending stat tiles, Request Leave button, "My requests" list (date range, working days, type chip, status pill).
+- Request Leave (new, `LeaveRequestFormScreen`): available-balance banner, type dropdown + chips, start/end `DateField`s, reason, "Total days: n · Working days", Submit Request, "Approval typically arrives within 24 hours".
+- Leave Management (admin), filling the placeholder `LeaveRequestsScreen`: "n Pending" badge, Pending / History toggle, request cards (avatar, name, dates, type chip, reason, Reject / Approve).
+- Team, filling the placeholder `TeamMembersScreen`: search field, member rows (avatar, name, role label, "n active tasks", On Leave badge).
+- Member Profile (new, `/leader/team/:uid`): avatar, name, email, role badge, read-only skills, current tasks with status pills, "Add to project" through the existing `ProjectRepository.addMember`.
 
 ---
 
 ## Phase 8 — Notifications (FR unknown; screenshots 01, 03)
 
-- New `features/notifications/data/`: `AppNotification`, `NotificationType`, `NotificationRepository` (watch mine, unread count, markRead, markAllRead).
-- New notification center screen (new file, new route): unread tint + dot, per-type icon, relative time (`core/utils/relative_time.dart`, new file, no `intl`), Mark all as read, "caught up" empty state.
+- New `features/notifications/data/`: `AppNotification`, `NotificationType`, `NotificationRepository` (watch mine, unread count, markRead, markAllRead, create).
+- Fills the placeholder `NotificationsScreen`: "Notifications" + "n new" chip, Mark all as read, unread tint + dot, per-type icon, title + subtitle/quote, relative time (`core/utils/relative_time.dart`, new file, no `intl`), "You're completely caught up" empty state.
 - Rules (additive, new `notifications` collection) + emulator tests for the sender/recipient checks and read-flag-only updates.
 
 ## Phase 7 — Calendar (FR unknown; screenshot 04)
 
-- New `features/reports/presentation/calendar_screen.dart` (new route): custom Monday-first month grid, dots (red if overdue), "Tasks on selected day" (icon, title, project name, status/Overdue pill).
-- New `calendarTasksProvider` merging the existing `projectTasksProvider` for projects the Admin leads. No rules changes.
+- Fills the placeholder `CalendarScreen`: custom Monday-first month grid with prev/next, selected-day circle, deadline dots (red if overdue), "Tasks on selected day" (icon, title, project · sprint, status / Overdue pill).
+- New `calendarTasksProvider` merging the existing `projectTasksProvider` for the projects the Admin leads. No rules changes.
 
 ## Phase 9 — Analytics (FR-2.5 progress; rest FR unknown; screenshot 03)
 
-- Add `fl_chart` (approved; pubspec diff shown first). New `features/reports/`: `analyticsProvider` (counts per status, completed %, overdue, blocked) over projects I lead; a new analytics screen (new file, new route) with stat tiles, donut (+ grey Not Started) and project progress bars.
-- Loading / empty / error states on every new screen.
+- Add `fl_chart` (approved; pubspec diff shown first).
+- New `features/reports/`: `analyticsProvider` (counts per status, completed %, overdue, blocked) over the projects I lead.
+- Fills the placeholder `AnalyticsScreen`: Projects / Completed % / Overdue / Blocked tiles, "Tasks by status" donut with total in the center + legend, "Project progress" bars.
+- Loading / empty / error states on every new or filled screen.
+
+---
+
+## Profile: mock vs. current (your decision; nothing changes until you say so)
+
+The mock has these; the current Profile doesn't:
+1. **Header block:** large initials avatar, name, email and a role badge ("Member" / "Admin"). Today these appear as form fields.
+2. **"My skills" card:** chip list, "n active" count and a "+ Add skill" chip. Today it's the `SkillTagsEditor` titled "Skill tags".
+3. **Theme as an inline Light / Dark / System segmented toggle** with the current mode named ("Light mode"). Today it's a `ThemeModeMenuButton` popup.
+4. **Change password row.** No such feature exists yet. It would need a re-authenticate + `updatePassword` flow, or reuse of the password-reset email.
+5. **Log out styling:** a full-width tinted error button (member) or an outlined error button (admin). Today it's the existing `SignOutButton`.
+6. **Admin: Analytics row inside the same settings card** as Theme and Change password. Today it's a separate ListTile in that card, so this is close already.
+
+The current Profile has these; the mock doesn't:
+- An editable **Name** field and a **Save** button.
+- The **Default role** shown as a field.
 
 ---
 
 ## Open questions (answer before the phase that needs them)
 
-**Phase 6**
-1. **Who edits `settings/leave`?** Proposal: any user whose `defaultRole` is `leader` (no mock exists for this screen).
-2. **Leave stat tiles:** Used = approved days this year (all types); Remaining = sum of remaining Casual + Sick + Emergency; Pending = pending days (all types)?
-3. **Over-balance requests:** block submission, or allow with a warning?
-4. **No approver available** (e.g. an Admin who belongs only to projects they lead alone): block with a message?
+**Phase 4**
+1. **History completeness — still open.** Both options were sent back; pick one:
+   - **(a) Allowed:** after each existing status / edit / reassign / subtask write succeeds, add one call that writes a history entry. The existing logic doesn't change, and a failed history write must not affect the original action. The diff for each existing file is shown before applying.
+   - **(b) Strict:** existing flows aren't touched. History shows only actions from the new screens for now.
 
-**All phases**
-5. Under the add-only rule the new screens can't replace the existing tab placeholders (Team, Calendar, Leave, Analytics, Notifications) or be linked from existing screens. How should users reach them — new routes only (reachable by URL / dev preview), or will you approve specific additive route changes?
+**Phase 4 — decided (2026-11-13)**
+- **Request Help → Blocked:** `TaskStatus.blocked` already exists (`task_status.dart`), so Request Help sets the task's status to Blocked along with the `helpNote`. (Had it not existed, no value would have been added; a "Help requested" badge would have been shown instead.)
+- **"Who can help?" candidates:** members of the task's project except the current user, least busy first (fewest active tasks), skill tags as the subtitle. From Phase 6 on, people on approved leave today are excluded.
+
+**Phase 6**
+4. **Who edits `settings/leave`?** Proposal: any user whose `defaultRole` is `leader`. No mock exists for a Leave settings screen. Build one without a mock, or seed allowances as constants for now?
+5. **Leave stat tiles:** Used = approved days this year (all types); Remaining = sum of remaining Casual + Sick + Emergency; Pending = pending days (all types)?
+6. **Over-balance requests:** block submission, or allow with a warning?
+7. **No approver available** (e.g. an Admin who belongs only to projects they lead alone): block with a message?
+8. **Leave detail screen** (with Cancel when pending) is in the earlier plan but not in the mocks or your list. Drop it, or keep it as a small extra?
+
+**Phase 8**
+9. **Who creates notifications?** Without Cloud Functions the sender's client writes them. New flows (help request, leave decision, comments) can do that. "Task assigned" happens in existing task code, which can't be modified. Allow an additive hook there, or defer assignment notifications to the FCM / Cloud Functions step?
