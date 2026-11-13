@@ -26,6 +26,7 @@ Mock files are in `design/screens/`. Status values: Not started → In progress 
 | Task Comments + Task History (tabs "Comments (n)" / "History") | `01_member_task_notif_profile.jpg` | **New** screen + new route under the task; one entry button added to existing Task Details | 4 | Not started |
 | Need Help (opened from Comments/History) | `02_member_leave_help.jpg` | **New** screen + new route | 4 | Not started |
 | Leave (member) | `02_member_leave_help.jpg` | **Placeholder**: `RequestLeaveScreen` (`features/member/screens/request_leave_screen.dart`, `/member/leave`) | 6 | Not started |
+| Leave Detail (Cancel while pending) | none (decided 2026-11-13) | **New** screen + new route | 6 | Not started |
 | Request Leave | `02_member_leave_help.jpg` | **New** screen + new route; class `LeaveRequestFormScreen` (`RequestLeaveScreen` is already the placeholder's name) | 6 | Not started |
 | Leave Management (admin) | `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `LeaveRequestsScreen` (`features/leader/screens/leave_requests_screen.dart`, `/leader/leave`) | 6 | Not started |
 | Team | `04_admin_team_calendar.jpg` | **Placeholder**: `TeamMembersScreen` (`features/leader/screens/team_members_screen.dart`, `/leader/team`) | 6 | Not started |
@@ -115,21 +116,19 @@ The current Profile has these; the mock doesn't:
 
 ## Open questions (answer before the phase that needs them)
 
-**Phase 4**
-1. **History completeness — still open.** Both options were sent back; pick one:
-   - **(a) Allowed:** after each existing status / edit / reassign / subtask write succeeds, add one call that writes a history entry. The existing logic doesn't change, and a failed history write must not affect the original action. The diff for each existing file is shown before applying.
-   - **(b) Strict:** existing flows aren't touched. History shows only actions from the new screens for now.
+All questions answered (2026-11-13). Decisions below.
 
 **Phase 4 — decided (2026-11-13)**
+- **History: strict.** Existing flows (status selector, task edit, reassign, subtasks) aren't touched. History shows only actions from the new screens for now. History for existing flows can be added later, through additive hooks or a Cloud Function (Firestore trigger on task writes).
 - **Request Help → Blocked:** `TaskStatus.blocked` already exists (`task_status.dart`), so Request Help sets the task's status to Blocked along with the `helpNote`. (Had it not existed, no value would have been added; a "Help requested" badge would have been shown instead.)
 - **"Who can help?" candidates:** members of the task's project except the current user, least busy first (fewest active tasks), skill tags as the subtitle. From Phase 6 on, people on approved leave today are excluded.
 
-**Phase 6**
-4. **Who edits `settings/leave`?** Proposal: any user whose `defaultRole` is `leader`. No mock exists for a Leave settings screen. Build one without a mock, or seed allowances as constants for now?
-5. **Leave stat tiles:** Used = approved days this year (all types); Remaining = sum of remaining Casual + Sick + Emergency; Pending = pending days (all types)?
-6. **Over-balance requests:** block submission, or allow with a warning?
-7. **No approver available** (e.g. an Admin who belongs only to projects they lead alone): block with a message?
-8. **Leave detail screen** (with Cancel when pending) is in the earlier plan but not in the mocks or your list. Drop it, or keep it as a small extra?
+**Phase 6 — decided (2026-11-13)**
+- **`settings/leave`:** any Admin (`defaultRole == 'leader'`) may change allowances. No settings screen for now. Seed defaults Casual 10, Sick 8, Emergency 3 in `settings/leave`; they're edited in the Firebase console.
+- **Leave stat tiles:** Used = approved days this year, all types. Remaining = what's left of Casual + Sick + Emergency (Other has no balance). Pending = days in pending requests.
+- **Over-balance requests:** blocked with a clear message. "Other" is never blocked.
+- **No approver available:** blocked with "No approver available. Contact your admin."
+- **Leave detail screen** with Cancel (while pending): built, as a new screen + new route.
 
-**Phase 8**
-9. **Who creates notifications?** Without Cloud Functions the sender's client writes them. New flows (help request, leave decision, comments) can do that. "Task assigned" happens in existing task code, which can't be modified. Allow an additive hook there, or defer assignment notifications to the FCM / Cloud Functions step?
+**Phase 8 — decided (2026-11-13)**
+- **Notifications:** new flows (help request, comments, leave decisions) write their own notifications from the sender's app. "Task assigned" waits for the Cloud Functions step; existing task code isn't touched.
