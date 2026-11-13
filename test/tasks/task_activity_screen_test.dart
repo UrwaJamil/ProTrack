@@ -281,6 +281,15 @@ void main() {
       expect(fakes.activity.calls, ['requestHelp']);
       final task = fakes.tasks.tasks['abcd1234/tid12345']!;
       expect(task.status, TaskStatus.blocked);
+      // The named helper is notified in the same request.
+      final notice = fakes.activity.notifications.values.single;
+      expect(notice['type'], 'help_requested');
+      expect(notice['projectId'], 'abcd1234');
+      expect(notice['taskId'], 'tid12345');
+      expect(
+        notice['message'],
+        'Mo Member requested your help on ${task.title}',
+      );
       // Back on Comments / History, the note is visible to the team.
       expect(find.text('Help requested from Mia Member'), findsOneWidget);
       expect(find.text('Rules tests fail'), findsOneWidget);

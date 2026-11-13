@@ -69,12 +69,17 @@ class _NeedHelpFormState extends ConsumerState<NeedHelpForm> {
     final router = GoRouter.of(context);
     setState(() => _sending = true);
     try {
+      final me = await ref.read(
+        userProfilesProvider(profilesKey([uid])).future,
+      );
       await ref
           .read(taskActivityRepositoryProvider)
           .requestHelp(
             _key.projectId,
             _key.taskId,
             requesterUid: uid,
+            requesterName: me[uid]?.name ?? 'A teammate',
+            taskTitle: widget.task.title,
             previousStatus: widget.task.status,
             note: HelpNote(text: _text.text.trim(), taggedUserId: _helperId),
           );

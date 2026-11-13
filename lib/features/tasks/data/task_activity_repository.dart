@@ -123,15 +123,37 @@ class TaskActivityRepository {
   /// entry's id is stored as `helpNote.requestId`, so the helper's accept
   /// can be tied to this request. The task write only touches `status`,
   /// `helpNote` and `updatedAt`, which the rules let an assignee change.
+  /// When a helper is named, the same batch also writes their
+  /// notification ("NAME requested your help on TASK") at
+  /// `help_requested_<requestId>`.
   Future<void> requestHelp(
     String projectId,
     String taskId, {
     required String requesterUid,
+    required String requesterName,
+    required String taskTitle,
     required TaskStatus previousStatus,
     required HelpNote note,
   }) {
     final entry = _history(projectId, taskId).doc();
-    final batch = _firestore.batch()
+    final helperUid = note.taggedUserId;
+    final batch = _firestore.batch();
+    if (helperUid != null) {
+      batch.set(
+        _firestore
+            .collection('notifications')
+            .doc(helpRequestedNotificationId(entry.id)),
+        helpRequestedNotification(
+          helperUid: helperUid,
+          requesterUid: requesterUid,
+          requesterName: requesterName,
+          taskTitle: taskTitle,
+          projectId: projectId,
+          taskId: taskId,
+        )..['createdAt'] = FieldValue.serverTimestamp(),
+      );
+    }
+    batch
       ..update(_task(projectId, taskId), {
         'status': TaskStatus.blocked.value,
         'helpNote': note.withRequestId(entry.id).toMap(),
@@ -228,3 +250,33 @@ Map<String, dynamic> helpAcceptedNotification({
   'message': '$helperName accepted your help request',
   'read': false,
 };
+
+/// The fixed `notifications/{id}` of a help request's notice to the
+/// helper.
+String helpRequestedNotificationId(String requestId) =>
+    'help_requested_$requestId';
+
+/// `notifications/{nid}` telling [helperUid] that [requesterName] asked
+/// for their help on [taskTitle], without `createdAt`. The message is kept
+/// within the rules' 200-character limit.
+Map<String, dynamic> helpRequestedNotification({
+  required String helperUid,
+  required String requesterUid,
+  required String requesterName,
+  required String taskTitle,
+  required String projectId,
+  required String taskId,
+}) => {
+  'userId': helperUid,
+  'senderId': requesterUid,
+  'type': 'help_requested',
+  'projectId': projectId,
+  'taskId': taskId,
+  'message':
+      '${_clip(requesterName, 60)} requested your help on '
+      '${_clip(taskTitle, 100)}',
+  'read': false,
+};
+
+String _clip(String s, int max) =>
+    s.length <= max ? s : '${s.substring(0, max - 1)}…';

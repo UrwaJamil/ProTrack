@@ -301,7 +301,7 @@ service cloud.firestore {
             'message', 'read', 'createdAt'])
           && d.userId is string && d.projectId is string
           && d.senderId == request.auth.uid
-          && d.type in ['help_accepted']
+          && d.type in ['help_accepted', 'help_requested']
           && d.message is string && d.message.size() > 0
           && d.message.size() <= 200
           && d.read == false
@@ -323,13 +323,37 @@ service cloud.firestore {
             .data.who == d.userId;
       }
 
+      // "NAME requested your help on TASK": only in the same batch that
+      // creates the sender's `help_requested` history entry and sets the
+      // task's help note to that request, at `help_requested_<requestId>`
+      // (so once per request), and only to the helper the note names.
+      function helpRequested(d) {
+        let requestId = getAfter(/databases/$(database)/documents/projects/$(d.projectId)/tasks/$(d.taskId))
+          .data.get('helpNote', {}).get('requestId', '');
+        let taggedUserId = getAfter(/databases/$(database)/documents/projects/$(d.projectId)/tasks/$(d.taskId))
+          .data.get('helpNote', {}).get('taggedUserId', '');
+        let entry = getAfter(/databases/$(database)/documents/projects/$(d.projectId)/tasks/$(d.taskId)/history/$(requestId))
+          .data;
+        return d.taskId is string
+          && requestId is string && requestId != ''
+          && notificationId == 'help_requested_' + requestId
+          && d.userId != request.auth.uid
+          && taggedUserId == d.userId
+          && !exists(/databases/$(database)/documents/projects/$(d.projectId)/tasks/$(d.taskId)/history/$(requestId))
+          && entry.who == request.auth.uid
+          && entry.action == 'help_requested'
+          && entry.get('to', '') == d.userId;
+      }
+
       allow read: if signedIn() && resource.data.userId == request.auth.uid;
 
       allow create: if signedIn()
         && validNotification(request.resource.data)
         && sharesProject(request.resource.data)
         && (request.resource.data.type != 'help_accepted'
-          || helpAccepted(request.resource.data));
+          || helpAccepted(request.resource.data))
+        && (request.resource.data.type != 'help_requested'
+          || helpRequested(request.resource.data));
 
       allow update: if signedIn()
         && resource.data.userId == request.auth.uid

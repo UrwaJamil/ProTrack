@@ -113,11 +113,26 @@ class PreviewTaskActivityRepository implements TaskActivityRepository {
     String projectId,
     String taskId, {
     required String requesterUid,
+    required String requesterName,
+    required String taskTitle,
     required TaskStatus previousStatus,
     required HelpNote note,
   }) async {
     await tasks.updateStatus(projectId, taskId, TaskStatus.blocked);
     final id = _id();
+    final helperUid = note.taggedUserId;
+    if (helperUid != null) {
+      notifications[helpRequestedNotificationId(
+        id,
+      )] = helpRequestedNotification(
+        helperUid: helperUid,
+        requesterUid: requesterUid,
+        requesterName: requesterName,
+        taskTitle: taskTitle,
+        projectId: projectId,
+        taskId: taskId,
+      )..['createdAt'] = DateTime.now();
+    }
     _helpNotes[key(projectId, taskId)] = note.withRequestId(id);
     _history
         .putIfAbsent(key(projectId, taskId), () => [])

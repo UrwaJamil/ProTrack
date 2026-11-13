@@ -59,6 +59,8 @@ class FakeTaskActivityRepository extends PreviewTaskActivityRepository {
     String projectId,
     String taskId, {
     required String requesterUid,
+    required String requesterName,
+    required String taskTitle,
     required TaskStatus previousStatus,
     required HelpNote note,
   }) async {
@@ -67,6 +69,8 @@ class FakeTaskActivityRepository extends PreviewTaskActivityRepository {
       projectId,
       taskId,
       requesterUid: requesterUid,
+      requesterName: requesterName,
+      taskTitle: taskTitle,
       previousStatus: previousStatus,
       note: note,
     );
