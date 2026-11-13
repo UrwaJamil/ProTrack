@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/widgets/pill_toggle.dart';
+import '../../../notifications/application/recipients.dart';
 import '../../../projects/application/projects_providers.dart';
 import '../../../projects/data/project.dart';
 import '../../application/comment_permissions.dart';
@@ -47,9 +48,20 @@ class _TaskActivityBodyState extends ConsumerState<TaskActivityBody> {
     final uid = ref.read(currentUidProvider) ?? '';
     final messenger = ScaffoldMessenger.of(context);
     try {
+      final me = await ref.read(
+        userProfilesProvider(profilesKey([uid])).future,
+      );
       await ref
           .read(taskActivityRepositoryProvider)
-          .addComment(_key.projectId, _key.taskId, authorId: uid, text: text);
+          .addComment(
+            _key.projectId,
+            _key.taskId,
+            authorId: uid,
+            text: text,
+            authorName: me[uid]?.name ?? 'A teammate',
+            taskTitle: widget.task.title,
+            recipients: commentRecipients(widget.project, widget.task, uid),
+          );
       return true;
     } catch (_) {
       messenger.showSnackBar(

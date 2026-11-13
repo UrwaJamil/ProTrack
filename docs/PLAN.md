@@ -5,6 +5,7 @@
 > **Exceptions (approved 2026-11-13):**
 > - **Placeholders are unfinished work.** The `build` body of a placeholder screen may be replaced (Notifications, Analytics, Calendar, Leave Management, Team, member Leave). Its file name, class name, constructor and route stay exactly as they are. The diff is shown before the edit.
 > - **Task Details** (`task_detail_screen.dart`) gets exactly one addition: an entry button that opens the new Comments / History screen. The diff is shown before the edit.
+> - **Unread-count stub** (approved 2026-11-13): `lib/features/notifications/application/notification_providers.dart` is an intended stub ("Stubbed at 0 until Phase 8"). Phase 8 replaces only its provider body so the bell's unread dot reads real data; `ProTrackAppBar` is not touched. The diff is shown before the edit.
 > - **Profile** (`profile_screen.dart`, `profile_settings_section.dart`, `skill_tags_editor.dart`) is built and is **not touched**. See "Profile: mock vs. current" below.
 
 Source of truth: `design/screens/*.jpg` (screenshots = spec) plus the decisions in `CLAUDE.md`. Requirements not cited in existing code are marked **FR unknown**.
@@ -31,7 +32,7 @@ Mock files are in `design/screens/`. Status values: Not started → In progress 
 | Leave Management (admin) | `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `LeaveRequestsScreen` (`features/leader/screens/leave_requests_screen.dart`, `/leader/leave`) | 6 | Done (see Phase 6 notes) |
 | Team | `04_admin_team_calendar.jpg` | **Placeholder**: `TeamMembersScreen` (`features/leader/screens/team_members_screen.dart`, `/leader/team`) | 6 | Done (see Phase 6 notes) |
 | Member Profile (opened from Team) | `04_admin_team_calendar.jpg` | **New** screen + new route `/leader/team/:uid` | 6 | Done (see Phase 6 notes) |
-| Notifications (member + admin) | `01_member_task_notif_profile.jpg`, `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `NotificationsScreen` (`features/common/notifications_screen.dart`, `/notifications`) | 8 | Not started |
+| Notifications (member + admin) | `01_member_task_notif_profile.jpg`, `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `NotificationsScreen` (`features/common/notifications_screen.dart`, `/notifications`) | 8 | Done, awaiting review (see Phase 8 notes) |
 | Calendar | `04_admin_team_calendar.jpg` | **Placeholder**: `CalendarScreen` (`features/leader/screens/calendar_screen.dart`, `/leader/calendar`) | 7 | Not started |
 | Analytics | `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `AnalyticsScreen` (`features/leader/screens/analytics_screen.dart`, `/leader/analytics`) | 9 | Not started |
 | Profile (member + admin) | `01_member_task_notif_profile.jpg`, `03_admin_leave_notif_analytics_profile.jpg` | **Existing, built. Not touched** (gaps listed below for your decision) | — | Built |
@@ -136,6 +137,66 @@ Bugs found in files that existed before the add-only rule. They aren't fixed her
 - Fills the placeholder `NotificationsScreen`: "Notifications" + "n new" chip, Mark all as read, unread tint + dot, per-type icon, title + subtitle/quote, relative time (`core/utils/relative_time.dart`, new file, no `intl`), "You're completely caught up" empty state.
 - Rules (additive, new `notifications` collection) + emulator tests for the sender/recipient checks and read-flag-only updates.
 
+**Phase 8 notes (built 2026-11-13; not committed, awaiting review)**
+- New:
+  - `features/notifications/data/`: `app_notification.dart` (`AppNotification`, `NotificationType`, `clipText`), `notification_repository.dart` (recipient side only: watch mine, unread count, markRead, markAllRead), `notification_payloads.dart` (`comment_added`, `task_blocked`, `leave_requested` payloads and their fixed ids).
+  - `features/notifications/application/`: `notification_center_providers.dart` (list, unread count, `notificationTarget`), `recipients.dart` (`commentRecipients`, `blockedRecipients`, `approverProjects`).
+  - `features/notifications/presentation/`: `notification_center_body.dart`, `widgets/notification_tile.dart`.
+  - `core/utils/relative_time.dart`.
+  - Senders still write their own notices, in the batch of the write that causes them. The repository has no generic `create`.
+- Existing files changed (approved diffs, 2026-11-13):
+  - Files on origin/main:
+    - `firestore.rules`: notifications block only. Versus origin/main, no line is removed.
+    - `firestore.indexes.json`: the composite index.
+    - The `NotificationsScreen` build body.
+    - The `unreadNotificationCountProvider` stub line.
+  - Phase 4 / 6 code:
+    - `TaskActivityRepository.addComment` (now a batch with the notices) and `requestHelp` (`adminIds`).
+    - `TaskActivityBody` and `NeedHelpForm`, which pass the recipients.
+    - `LeaveRepository.submit` (`notify`, `requesterName`, `LeaveNotifyException`, `leaveNoticeDetail`) and `LeaveRequestForm`.
+    - The preview fakes, overrides and catalog, `test/support/fake_task_activity.dart`, and one assertion in `test/tasks/task_activity_screen_test.dart`.
+- Who gets what:
+
+  | Type | Recipients | Written |
+  |---|---|---|
+  | `comment_added` | Task assignees + project Admins, minus the author | Same batch as the comment |
+  | `task_blocked` | Project Admins, minus the requester and the named helper (the helper gets `help_requested`) | Same batch as Need Help |
+  | `leave_requested` | Each approver, through a project they lead that the requester is in (active first) | After the request is saved, in batches of 8. If that fails: "Leave request sent, but approvers couldn't be notified." |
+
+- Tapping a notice marks it read and opens:
+  - for help, blocked and comment notices: the task's Comments / History, on the viewer's default-role dashboard;
+  - for a new leave request: Admin › Leave;
+  - for a leave decision: Member › Leave detail.
+- Rules: `commentId` and `detail` (≤200 characters) are allowed. Each new type has its own function: `taskBlocked`, `commentAdded`, `leaveRequested`.
+- Dev preview: `PreviewNotificationRepository` + `MockNotifications`. Tariq has a new leave request, a blocked task and a read comment. Ayesha has a comment, help accepted, a read help request and a read leave approval. The leave and task-activity fakes feed new notices into it. Admin › Notifications and Member › Notifications are now "Phase 8".
+- Tests:
+  - `flutter analyze` clean.
+  - `flutter test`: 311 passed, 2 skipped, 0 failed. New: `test/notifications/` (logic, center, writes).
+  - Rules tests: 114 passing. New: `firestore-tests/test/notification_center.test.js`.
+- **Deploy step (you run it):** `firebase deploy --only firestore:indexes` (and `firestore:rules`). Until the index is built, the list shows its error state.
+
+**Known limitations**
+- The unread count is a live query of all the user's unread notices (no cap). It's fine at team scale. If it grows, switch to a capped count or a counter doc.
+- The list shows the newest 50. Older notices aren't paged in.
+- Comment notices go only to people still in the project. Assignees who were removed are skipped, since the rules need a shared project.
+- A leave notice whose write fails isn't retried. The request stands, and approvers still see it in Admin › Leave.
+- Notices aren't deleted when their comment, task or leave request is.
+
+**Hooks to add later (need existing code or Cloud Functions)**
+- From mocks 01 and 03: "You were assigned …", "… completed …", "… deadline updated", "… joined the … squad". These come from the existing task and project flows, so they wait for the Cloud Functions step (CLAUDE.md decision 7).
+- FCM push and "deadline in 24 h" reminders (Blaze; ask first).
+
+**Differences from the mocks**
+- *Messages:* the actor's full name and the task title are spelled out ("Hamza Farooq commented on Design login flow", not "Hamza commented on your task"). The whole message is bold while unread, rather than only the name. The leave decision keeps the Phase 6 wording ("Tariq Khan approved your Sick leave (Oct 22 – Oct 23, 2026)").
+- *Subtitle:* comments show the quoted text, as in the mock. Other notices show "Project name · detail" instead of the mock's "Project • Assigned by NAME".
+- *Header:*
+  - The "n new" chip shows whenever something is unread, in both roles; mock 03 has no chip.
+  - "Mark all as read" always has the ✓✓ icon (mock 01 has it, mock 03 doesn't). It's disabled when nothing is unread.
+  - The title and chip wrap above the button on narrow phones.
+- *Caught-up footer:* shows only when nothing is unread. Mock 03 shows it under unread items.
+- *Icons:* per type (help, handshake, block, comment, leave request / approved / rejected) in a circle that's filled while unread. The mock's assignment, folder and team icons belong to the hooked types above.
+- *Bell dot:* rendered by the existing `ProTrackAppBar` (unchanged), which now reads the live count.
+
 ## Phase 7 — Calendar (FR unknown; screenshot 04)
 
 - Fills the placeholder `CalendarScreen`: custom Monday-first month grid with prev/next, selected-day circle, deadline dots (red if overdue), "Tasks on selected day" (icon, title, project · sprint, status / Overdue pill).
@@ -189,4 +250,9 @@ All questions answered (2026-11-13). Decisions below.
 - **`settings/leave`:** read-only in the app (`write: false`); edited in the Firebase console only.
 
 **Phase 8 — decided (2026-11-13)**
+- **Unread dot:** via the approved `notification_providers.dart` stub exception (see the top of this file).
+- **List query:** composite index `notifications (userId ASC, createdAt DESC)` in `firestore.indexes.json`, newest 50, server-sorted. **Deploy step (you run it):** `firebase deploy --only firestore:indexes`. Until it's built, the list query fails with a "requires an index" error (the screen shows its error state).
+- **`task_blocked`:** Need Help also notifies the project's Admins in the same batch. Rules: only in the batch that sets Blocked, recipients must be project leaders, never the writer.
+- **Comment recipients:** the task's assignees plus project Admins, minus the author.
+- **"New leave request"** notices to approvers (deferred from Phase 6) are part of Phase 8.
 - **Notifications:** new flows (help request, comments, leave decisions) write their own notifications from the sender's app. "Task assigned" waits for the Cloud Functions step; existing task code isn't touched.

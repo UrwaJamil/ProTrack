@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/date_format.dart';
 import '../../auth/data/user_repository.dart';
+import '../../notifications/data/notification_payloads.dart';
 import 'leave_request.dart';
 import 'leave_settings.dart';
 import 'leave_type.dart';
@@ -80,16 +81,53 @@ class LeaveRepository {
 
   /// Creates a pending request. [approverIds] must not be empty (the form
   /// blocks with "No approver available" first).
+  ///
+  /// Phase 8: then a `leave_requested` notice for each approver in
+  /// [notify] (approver -> a project they lead that the requester is in;
+  /// see `approverProjects`), in small batches after the request exists,
+  /// so a failed notice can't block the request. If a notice fails, the
+  /// request still stands and [LeaveNotifyException] is thrown.
   Future<String> submit(
     LeaveDraft draft, {
     required String userId,
     required List<String> approverIds,
+    Map<String, String> notify = const {},
+    String requesterName = 'A teammate',
   }) async {
     final doc = _requests.doc();
     await doc.set({
       ...draft.toMap(userId: userId, approverIds: approverIds),
       'createdAt': FieldValue.serverTimestamp(),
     });
+    final entries = [
+      for (final e in notify.entries)
+        if (e.key != userId && approverIds.contains(e.key)) e,
+    ];
+    try {
+      // Each notice reads its project in the rules; 8 per batch stays
+      // well under the per-request document-access limit.
+      for (var i = 0; i < entries.length; i += 8) {
+        final batch = _firestore.batch();
+        for (final e in entries.skip(i).take(8)) {
+          batch.set(
+            _firestore
+                .collection('notifications')
+                .doc(leaveRequestedNotificationId(doc.id, e.key)),
+            leaveRequestedNotification(
+              recipient: e.key,
+              requesterUid: userId,
+              requesterName: requesterName,
+              leaveId: doc.id,
+              projectId: e.value,
+              detail: leaveNoticeDetail(draft),
+            )..['createdAt'] = FieldValue.serverTimestamp(),
+          );
+        }
+        await batch.commit();
+      }
+    } catch (_) {
+      throw LeaveNotifyException(doc.id);
+    }
     return doc.id;
   }
 
@@ -169,4 +207,21 @@ Map<String, dynamic> leaveDecisionNotification(
         '${request.type.label} leave ($range)',
     'read': false,
   };
+}
+
+/// The request was saved, but its approvers couldn't be notified
+/// (Phase 8).
+class LeaveNotifyException implements Exception {
+  const LeaveNotifyException(this.leaveId);
+
+  final String leaveId;
+}
+
+/// "Casual leave · Nov 12 – Nov 14, 2026", under a `leave_requested`
+/// notice.
+String leaveNoticeDetail(LeaveDraft draft) {
+  final range = dayOf(draft.fromDate) == dayOf(draft.toDate)
+      ? formatDate(draft.fromDate)
+      : formatDateRange(draft.fromDate, draft.toDate);
+  return '${draft.type.label} leave · $range';
 }

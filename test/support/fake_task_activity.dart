@@ -10,6 +10,7 @@ class FakeTaskActivityRepository extends PreviewTaskActivityRepository {
     super.comments,
     super.history,
     super.helpNotes,
+    super.sink,
   });
 
   final calls = <String>[];
@@ -28,9 +29,20 @@ class FakeTaskActivityRepository extends PreviewTaskActivityRepository {
     String taskId, {
     required String authorId,
     required String text,
+    String authorName = 'A teammate',
+    String taskTitle = 'a task',
+    Iterable<String> recipients = const [],
   }) async {
     _check('addComment');
-    await super.addComment(projectId, taskId, authorId: authorId, text: text);
+    await super.addComment(
+      projectId,
+      taskId,
+      authorId: authorId,
+      text: text,
+      authorName: authorName,
+      taskTitle: taskTitle,
+      recipients: recipients,
+    );
   }
 
   @override
@@ -63,6 +75,7 @@ class FakeTaskActivityRepository extends PreviewTaskActivityRepository {
     required String taskTitle,
     required TaskStatus previousStatus,
     required HelpNote note,
+    Iterable<String> adminIds = const [],
   }) async {
     _check('requestHelp');
     await super.requestHelp(
@@ -73,6 +86,7 @@ class FakeTaskActivityRepository extends PreviewTaskActivityRepository {
       taskTitle: taskTitle,
       previousStatus: previousStatus,
       note: note,
+      adminIds: adminIds,
     );
   }
 

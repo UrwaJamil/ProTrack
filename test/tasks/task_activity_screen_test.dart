@@ -282,7 +282,10 @@ void main() {
       final task = fakes.tasks.tasks['abcd1234/tid12345']!;
       expect(task.status, TaskStatus.blocked);
       // The named helper is notified in the same request.
-      final notice = fakes.activity.notifications.values.single;
+      // (Admins also get `task_blocked`, Phase 8.)
+      final notice = fakes.activity.notifications.values.singleWhere(
+        (n) => n['type'] == 'help_requested',
+      );
       expect(notice['type'], 'help_requested');
       expect(notice['projectId'], 'abcd1234');
       expect(notice['taskId'], 'tid12345');

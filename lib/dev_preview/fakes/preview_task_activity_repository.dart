@@ -1,3 +1,4 @@
+import '../../features/notifications/data/notification_payloads.dart';
 import '../../features/tasks/data/help_note.dart';
 import '../../features/tasks/data/task_activity_repository.dart';
 import '../../features/tasks/data/task_comment.dart';
@@ -5,6 +6,7 @@ import '../../features/tasks/data/task_history_entry.dart';
 import '../../features/tasks/data/task_repository.dart';
 import '../../features/tasks/data/task_status.dart';
 import 'live_store.dart';
+import 'preview_notification_repository.dart';
 
 /// In-memory [TaskActivityRepository] for the dev preview. A help
 /// request also sets the task's status through [tasks], like the real
@@ -15,6 +17,7 @@ class PreviewTaskActivityRepository implements TaskActivityRepository {
     Map<String, List<TaskComment>> comments = const {},
     Map<String, List<TaskHistoryEntry>> history = const {},
     Map<String, HelpNote> helpNotes = const {},
+    this.sink,
   }) {
     comments.forEach((k, v) => _comments[k] = [...v]);
     history.forEach((k, v) => _history[k] = [...v]);
@@ -22,6 +25,15 @@ class PreviewTaskActivityRepository implements TaskActivityRepository {
   }
 
   final TaskRepository tasks;
+
+  /// Where notices also go, so the preview's notification center shows
+  /// them (Phase 8).
+  final PreviewNotificationRepository? sink;
+
+  void _notify(String id, Map<String, dynamic> data) {
+    notifications[id] = data..['createdAt'] = DateTime.now();
+    sink?.write(id, data);
+  }
 
   /// All keyed by "projectId/taskId".
   final _comments = <String, List<TaskComment>>{};
@@ -48,17 +60,36 @@ class PreviewTaskActivityRepository implements TaskActivityRepository {
     String taskId, {
     required String authorId,
     required String text,
+    String authorName = 'A teammate',
+    String taskTitle = 'a task',
+    Iterable<String> recipients = const [],
   }) async {
+    final id = _id();
     _comments
         .putIfAbsent(key(projectId, taskId), () => [])
         .add(
           TaskComment(
-            id: _id(),
+            id: id,
             authorId: authorId,
             text: text.trim(),
             createdAt: DateTime.now(),
           ),
         );
+    for (final r in {...recipients}..remove(authorId)) {
+      _notify(
+        commentNotificationId(id, r),
+        commentNotification(
+          recipient: r,
+          authorUid: authorId,
+          authorName: authorName,
+          taskTitle: taskTitle,
+          text: text,
+          projectId: projectId,
+          taskId: taskId,
+          commentId: id,
+        ),
+      );
+    }
     _store.notify();
   }
 
@@ -117,21 +148,38 @@ class PreviewTaskActivityRepository implements TaskActivityRepository {
     required String taskTitle,
     required TaskStatus previousStatus,
     required HelpNote note,
+    Iterable<String> adminIds = const [],
   }) async {
     await tasks.updateStatus(projectId, taskId, TaskStatus.blocked);
     final id = _id();
     final helperUid = note.taggedUserId;
     if (helperUid != null) {
-      notifications[helpRequestedNotificationId(
-        id,
-      )] = helpRequestedNotification(
-        helperUid: helperUid,
-        requesterUid: requesterUid,
-        requesterName: requesterName,
-        taskTitle: taskTitle,
-        projectId: projectId,
-        taskId: taskId,
-      )..['createdAt'] = DateTime.now();
+      _notify(
+        helpRequestedNotificationId(id),
+        helpRequestedNotification(
+          helperUid: helperUid,
+          requesterUid: requesterUid,
+          requesterName: requesterName,
+          taskTitle: taskTitle,
+          projectId: projectId,
+          taskId: taskId,
+        ),
+      );
+    }
+    for (final admin in {...adminIds}
+      ..remove(requesterUid)
+      ..remove(helperUid)) {
+      _notify(
+        taskBlockedNotificationId(id, admin),
+        taskBlockedNotification(
+          recipient: admin,
+          requesterUid: requesterUid,
+          taskTitle: taskTitle,
+          reason: note.text,
+          projectId: projectId,
+          taskId: taskId,
+        ),
+      );
     }
     _helpNotes[key(projectId, taskId)] = note.withRequestId(id);
     _history
@@ -189,15 +237,16 @@ class PreviewTaskActivityRepository implements TaskActivityRepository {
         at: DateTime.now(),
       ),
     );
-    notifications[helpAcceptedNotificationId(
-      requestId,
-    )] = helpAcceptedNotification(
-      requesterUid: request.who,
-      helperUid: helperUid,
-      helperName: helperName,
-      projectId: projectId,
-      taskId: taskId,
-    )..['createdAt'] = DateTime.now();
+    _notify(
+      helpAcceptedNotificationId(requestId),
+      helpAcceptedNotification(
+        requesterUid: request.who,
+        helperUid: helperUid,
+        helperName: helperName,
+        projectId: projectId,
+        taskId: taskId,
+      ),
+    );
     _store.notify();
   }
 }

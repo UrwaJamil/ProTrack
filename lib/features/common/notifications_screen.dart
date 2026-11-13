@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'placeholder_content.dart';
+import '../notifications/presentation/notification_center_body.dart';
 
 /// Full-screen page opened from the app bar bell, shared by Admin (leader)
 /// and Member — the notification center doesn't differ by role until real
@@ -12,10 +12,7 @@ class NotificationsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Notifications')),
-      body: const PlaceholderContent(
-        icon: Icons.notifications_outlined,
-        message: 'Notifications\ncoming in a later phase',
-      ),
+      body: const NotificationCenterBody(),
     );
   }
 }

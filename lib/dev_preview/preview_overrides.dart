@@ -5,18 +5,21 @@ import '../features/auth/data/auth_repository.dart';
 import '../features/auth/data/email_availability_repository.dart';
 import '../features/auth/data/user_repository.dart';
 import '../features/leave/data/leave_repository.dart';
+import '../features/notifications/data/notification_repository.dart';
 import '../features/projects/application/projects_providers.dart';
 import '../features/projects/data/project_repository.dart';
 import '../features/tasks/data/task_activity_repository.dart';
 import '../features/tasks/data/task_repository.dart';
 import 'fakes/preview_auth_repository.dart';
 import 'fakes/preview_leave_repository.dart';
+import 'fakes/preview_notification_repository.dart';
 import 'fakes/preview_project_repository.dart';
 import 'fakes/preview_task_activity_repository.dart';
 import 'fakes/preview_task_repository.dart';
 import 'fakes/preview_user_repository.dart';
 import 'mock/mock_activity.dart';
 import 'mock/mock_leave.dart';
+import 'mock/mock_notifications.dart';
 import 'mock/mock_people.dart';
 import 'mock/mock_projects.dart';
 import 'mock/mock_tasks.dart';
@@ -36,6 +39,7 @@ List<Override> previewOverrides({UserRole signedInAs = UserRole.leader}) {
     uidByEmail: {for (final u in MockPeople.all) u.email: u.uid},
     signedInUid: MockPeople.meFor(signedInAs),
   );
+  final notifications = PreviewNotificationRepository(MockNotifications.all);
 
   return [
     firebaseAuthProvider.overrideWith((ref) => throw _noFirebase),
@@ -53,11 +57,16 @@ List<Override> previewOverrides({UserRole signedInAs = UserRole.leader}) {
         comments: MockActivity.comments,
         history: MockActivity.history,
         helpNotes: MockActivity.helpNotes,
+        sink: notifications,
       ),
     ),
     leaveRepositoryProvider.overrideWithValue(
-      PreviewLeaveRepository(requests: MockLeave.requests),
+      PreviewLeaveRepository(
+        requests: MockLeave.requests,
+        sink: notifications,
+      ),
     ),
+    notificationRepositoryProvider.overrideWithValue(notifications),
     todayProvider.overrideWithValue(mockToday),
   ];
 }

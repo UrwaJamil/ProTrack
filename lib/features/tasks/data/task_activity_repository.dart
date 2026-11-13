@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/data/user_repository.dart';
+import '../../notifications/data/notification_payloads.dart';
 import 'help_note.dart';
 import 'task_comment.dart';
 import 'task_history_entry.dart';
@@ -53,16 +54,44 @@ class TaskActivityRepository {
             ],
           );
 
+  /// Phase 8: in the same batch, a `comment_added` notice for each of
+  /// [recipients] except the author (assignees + project Admins; see
+  /// `commentRecipients`).
   Future<void> addComment(
     String projectId,
     String taskId, {
     required String authorId,
     required String text,
-  }) => _comments(projectId, taskId).add({
-    'authorId': authorId,
-    'text': text.trim(),
-    'createdAt': FieldValue.serverTimestamp(),
-  });
+    String authorName = 'A teammate',
+    String taskTitle = 'a task',
+    Iterable<String> recipients = const [],
+  }) {
+    final comment = _comments(projectId, taskId).doc();
+    final batch = _firestore.batch()
+      ..set(comment, {
+        'authorId': authorId,
+        'text': text.trim(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    for (final r in {...recipients}..remove(authorId)) {
+      batch.set(
+        _firestore
+            .collection('notifications')
+            .doc(commentNotificationId(comment.id, r)),
+        commentNotification(
+          recipient: r,
+          authorUid: authorId,
+          authorName: authorName,
+          taskTitle: taskTitle,
+          text: text,
+          projectId: projectId,
+          taskId: taskId,
+          commentId: comment.id,
+        )..['createdAt'] = FieldValue.serverTimestamp(),
+      );
+    }
+    return batch.commit();
+  }
 
   /// Author only (rules).
   Future<void> editComment(
@@ -134,10 +163,30 @@ class TaskActivityRepository {
     required String taskTitle,
     required TaskStatus previousStatus,
     required HelpNote note,
+    Iterable<String> adminIds = const [],
   }) {
     final entry = _history(projectId, taskId).doc();
     final helperUid = note.taggedUserId;
     final batch = _firestore.batch();
+    // Phase 8: "Task X is blocked" for the project's Admins (decision C),
+    // never the requester or the named helper.
+    for (final admin in {...adminIds}
+      ..remove(requesterUid)
+      ..remove(helperUid)) {
+      batch.set(
+        _firestore
+            .collection('notifications')
+            .doc(taskBlockedNotificationId(entry.id, admin)),
+        taskBlockedNotification(
+          recipient: admin,
+          requesterUid: requesterUid,
+          taskTitle: taskTitle,
+          reason: note.text,
+          projectId: projectId,
+          taskId: taskId,
+        )..['createdAt'] = FieldValue.serverTimestamp(),
+      );
+    }
     if (helperUid != null) {
       batch.set(
         _firestore

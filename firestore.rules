@@ -296,15 +296,21 @@ service cloud.firestore {
 
       function validNotification(d) {
         return d.keys().hasOnly(['userId', 'senderId', 'type', 'projectId',
-            'taskId', 'leaveId', 'message', 'read', 'createdAt'])
+            'taskId', 'leaveId', 'commentId', 'message', 'detail', 'read',
+            'createdAt'])
           && d.keys().hasAll(['userId', 'senderId', 'type', 'projectId',
             'message', 'read', 'createdAt'])
           && d.userId is string && d.projectId is string
           && d.senderId == request.auth.uid
           && d.type in ['help_accepted', 'help_requested',
-            'leave_approved', 'leave_rejected']
+            'leave_approved', 'leave_rejected', 'leave_requested',
+            'comment_added', 'task_blocked']
           && (!('leaveId' in d)
-            || d.type in ['leave_approved', 'leave_rejected'])
+            || d.type in ['leave_approved', 'leave_rejected',
+              'leave_requested'])
+          && (!('commentId' in d) || d.type == 'comment_added')
+          && (!('detail' in d)
+            || (d.detail is string && d.detail.size() <= 200))
           && d.message is string && d.message.size() > 0
           && d.message.size() <= 200
           && d.read == false
@@ -366,6 +372,62 @@ service cloud.firestore {
           && after.userId == d.userId;
       }
 
+      // Phase 8. "Task TITLE is blocked": only in the batch that sets the
+      // task Blocked with a new help request (the sender's
+      // `help_requested` history entry), at
+      // `task_blocked_<requestId>_<recipient>` (once per request and
+      // recipient), only to a project leader other than the sender.
+      function taskBlocked(d) {
+        let task = getAfter(/databases/$(database)/documents/projects/$(d.projectId)/tasks/$(d.taskId))
+          .data;
+        let requestId = task.get('helpNote', {}).get('requestId', '');
+        let entry = getAfter(/databases/$(database)/documents/projects/$(d.projectId)/tasks/$(d.taskId)/history/$(requestId))
+          .data;
+        return d.taskId is string
+          && requestId is string && requestId != ''
+          && notificationId == 'task_blocked_' + requestId + '_' + d.userId
+          && d.userId != request.auth.uid
+          && task.status == 'blocked'
+          && !exists(/databases/$(database)/documents/projects/$(d.projectId)/tasks/$(d.taskId)/history/$(requestId))
+          && entry.who == request.auth.uid
+          && entry.action == 'help_requested'
+          && get(/databases/$(database)/documents/projects/$(d.projectId))
+            .data.members.get(d.userId, '') == 'leader';
+      }
+
+      // "NAME commented on TASK": only in the batch that creates the
+      // sender's comment `commentId`, at `comment_<commentId>_<recipient>`
+      // (once per comment and recipient), only to one of the task's
+      // assignees or a project leader, never the author.
+      function commentAdded(d) {
+        let path = /databases/$(database)/documents/projects/$(d.projectId)/tasks/$(d.taskId)/comments/$(d.commentId);
+        return d.taskId is string && d.commentId is string
+          && notificationId == 'comment_' + d.commentId + '_' + d.userId
+          && d.userId != request.auth.uid
+          && !exists(path)
+          && getAfter(path).data.authorId == request.auth.uid
+          && (d.userId in get(/databases/$(database)/documents/projects/$(d.projectId)/tasks/$(d.taskId))
+              .data.assignedTo
+            || get(/databases/$(database)/documents/projects/$(d.projectId))
+              .data.members.get(d.userId, '') == 'leader');
+      }
+
+      // "NAME submitted a leave request": for the sender's own pending
+      // request `leaveId`, at `leave_requested_<leaveId>_<recipient>`
+      // (once per request and approver), only to an approver named on it
+      // who leads the notice's project.
+      function leaveRequested(d) {
+        let leave = get(/databases/$(database)/documents/leaveRequests/$(d.leaveId)).data;
+        return d.leaveId is string
+          && !('taskId' in d)
+          && notificationId == 'leave_requested_' + d.leaveId + '_' + d.userId
+          && leave.userId == request.auth.uid
+          && leave.status == 'pending'
+          && d.userId in leave.approverIds
+          && get(/databases/$(database)/documents/projects/$(d.projectId))
+            .data.members.get(d.userId, '') == 'leader';
+      }
+
       allow read: if signedIn() && resource.data.userId == request.auth.uid;
 
       allow create: if signedIn()
@@ -377,7 +439,13 @@ service cloud.firestore {
           || helpRequested(request.resource.data))
         && (!(request.resource.data.type in ['leave_approved',
             'leave_rejected'])
-          || leaveDecided(request.resource.data));
+          || leaveDecided(request.resource.data))
+        && (request.resource.data.type != 'task_blocked'
+          || taskBlocked(request.resource.data))
+        && (request.resource.data.type != 'comment_added'
+          || commentAdded(request.resource.data))
+        && (request.resource.data.type != 'leave_requested'
+          || leaveRequested(request.resource.data));
 
       allow update: if signedIn()
         && resource.data.userId == request.auth.uid

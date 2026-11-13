@@ -153,7 +153,7 @@ final previewEntries = <PreviewEntry>[
       'Bilal Siddiqui',
       false,
     ),
-    ('Notifications', '/notifications', 'Placeholder → Phase 8', null, false),
+    ('Notifications', '/notifications', 'Phase 8', 'Mark all as read', false),
   ]),
 
   // ------------------------------------------------------------ Member
@@ -212,7 +212,7 @@ final previewEntries = <PreviewEntry>[
       null,
       false,
     ),
-    ('Notifications', '/notifications', 'Placeholder → Phase 8', null, false),
+    ('Notifications', '/notifications', 'Phase 8', 'Mark all as read', false),
   ]),
 
   // -------------------------------------------------------------- Auth

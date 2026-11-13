@@ -3,7 +3,9 @@ import '../../features/leave/data/leave_request.dart';
 import '../../features/leave/data/leave_settings.dart';
 import '../../features/leave/data/leave_type.dart';
 import '../../features/leave/data/working_days.dart';
+import '../../features/notifications/data/notification_payloads.dart';
 import 'live_store.dart';
+import 'preview_notification_repository.dart';
 
 /// In-memory [LeaveRepository] for the dev preview and widget tests.
 /// Mirrors the real batches: approving also writes the `leaveDays` entry,
@@ -12,6 +14,7 @@ class PreviewLeaveRepository implements LeaveRepository {
   PreviewLeaveRepository({
     List<LeaveRequest> requests = const [],
     this.settings = LeaveSettings.defaults,
+    this.sink,
   }) {
     for (final r in requests) {
       _requests[r.id] = r;
@@ -20,6 +23,15 @@ class PreviewLeaveRepository implements LeaveRepository {
   }
 
   LeaveSettings settings;
+
+  /// Where notices also go, so the preview's notification center shows
+  /// them (Phase 8).
+  final PreviewNotificationRepository? sink;
+
+  void _notify(String id, Map<String, dynamic> data) {
+    notifications[id] = data..['createdAt'] = DateTime.now();
+    sink?.write(id, data);
+  }
   final _requests = <String, LeaveRequest>{};
   final _days = <String, LeaveDays>{};
   final _store = LiveStore();
@@ -74,8 +86,24 @@ class PreviewLeaveRepository implements LeaveRepository {
     LeaveDraft draft, {
     required String userId,
     required List<String> approverIds,
+    Map<String, String> notify = const {},
+    String requesterName = 'A teammate',
   }) async {
     final id = 'preview-leave-${_nextId++}';
+    for (final e in notify.entries) {
+      if (e.key == userId || !approverIds.contains(e.key)) continue;
+      _notify(
+        leaveRequestedNotificationId(id, e.key),
+        leaveRequestedNotification(
+          recipient: e.key,
+          requesterUid: userId,
+          requesterName: requesterName,
+          leaveId: id,
+          projectId: e.value,
+          detail: leaveNoticeDetail(draft),
+        ),
+      );
+    }
     _requests[id] = LeaveRequest(
       id: id,
       userId: userId,
@@ -131,13 +159,16 @@ class PreviewLeaveRepository implements LeaveRepository {
     );
     _requests[current.id] = decided;
     if (approve) _days[current.id] = _daysOf(decided);
-    notifications[leaveNotificationId(current.id)] = leaveDecisionNotification(
-      current,
-      approve: approve,
-      deciderUid: deciderUid,
-      deciderName: deciderName,
-      projectId: projectId,
-    )..['createdAt'] = DateTime.now();
+    _notify(
+      leaveNotificationId(current.id),
+      leaveDecisionNotification(
+        current,
+        approve: approve,
+        deciderUid: deciderUid,
+        deciderName: deciderName,
+        projectId: projectId,
+      ),
+    );
     _store.notify();
   }
 }

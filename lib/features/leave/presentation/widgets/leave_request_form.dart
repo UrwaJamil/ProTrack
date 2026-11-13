@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/widgets/date_field.dart';
 import '../../../../core/widgets/labeled_field.dart';
 import '../../../../core/widgets/primary_button.dart';
+import '../../../notifications/application/recipients.dart';
 import '../../../projects/application/projects_providers.dart';
 import '../../../tasks/application/tasks_providers.dart';
 import '../../application/approvers.dart';
@@ -83,6 +84,10 @@ class _LeaveRequestFormState extends ConsumerState<LeaveRequestForm> {
     final router = GoRouter.of(context);
     setState(() => _sending = true);
     try {
+      final me = await ref.read(
+        userProfilesProvider(profilesKey([uid])).future,
+      );
+      final projects = ref.read(myProjectsProvider).value ?? const [];
       await ref
           .read(leaveRepositoryProvider)
           .submit(
@@ -96,9 +101,20 @@ class _LeaveRequestFormState extends ConsumerState<LeaveRequestForm> {
             ),
             userId: uid,
             approverIds: widget.approverIds,
+            notify: approverProjects(uid, widget.approverIds, projects),
+            requesterName: me[uid]?.name ?? 'A teammate',
           );
       messenger.showSnackBar(
         const SnackBar(content: Text('Leave request sent for approval.')),
+      );
+      if (router.canPop()) router.pop();
+    } on LeaveNotifyException {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Leave request sent, but approvers couldn't be notified.",
+          ),
+        ),
       );
       if (router.canPop()) router.pop();
     } catch (_) {

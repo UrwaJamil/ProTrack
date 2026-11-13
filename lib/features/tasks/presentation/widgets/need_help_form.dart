@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/widgets/labeled_field.dart';
 import '../../../../core/widgets/primary_button.dart';
+import '../../../notifications/application/recipients.dart';
 import '../../../projects/application/projects_providers.dart';
 import '../../../projects/data/project.dart';
 import '../../application/helper_ranking.dart';
@@ -82,6 +83,11 @@ class _NeedHelpFormState extends ConsumerState<NeedHelpForm> {
             taskTitle: widget.task.title,
             previousStatus: widget.task.status,
             note: HelpNote(text: _text.text.trim(), taggedUserId: _helperId),
+            adminIds: blockedRecipients(
+              widget.project,
+              requesterUid: uid,
+              helperUid: _helperId,
+            ),
           );
       messenger.showSnackBar(
         const SnackBar(content: Text('Help requested. Task marked Blocked.')),
