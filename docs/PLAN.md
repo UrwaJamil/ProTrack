@@ -33,7 +33,7 @@ Mock files are in `design/screens/`. Status values: Not started → In progress 
 | Team | `04_admin_team_calendar.jpg` | **Placeholder**: `TeamMembersScreen` (`features/leader/screens/team_members_screen.dart`, `/leader/team`) | 6 | Done (see Phase 6 notes) |
 | Member Profile (opened from Team) | `04_admin_team_calendar.jpg` | **New** screen + new route `/leader/team/:uid` | 6 | Done (see Phase 6 notes) |
 | Notifications (member + admin) | `01_member_task_notif_profile.jpg`, `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `NotificationsScreen` (`features/common/notifications_screen.dart`, `/notifications`) | 8 | Done (see Phase 8 notes) |
-| Calendar | `04_admin_team_calendar.jpg` | **Placeholder**: `CalendarScreen` (`features/leader/screens/calendar_screen.dart`, `/leader/calendar`) | 7 | Done, awaiting review (see Phase 7 notes) |
+| Calendar | `04_admin_team_calendar.jpg` | **Placeholder**: `CalendarScreen` (`features/leader/screens/calendar_screen.dart`, `/leader/calendar`) | 7 | Done (see Phase 7 notes) |
 | Analytics | `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `AnalyticsScreen` (`features/leader/screens/analytics_screen.dart`, `/leader/analytics`) | 9 | Not started |
 | Profile (member + admin) | `01_member_task_notif_profile.jpg`, `03_admin_leave_notif_analytics_profile.jpg` | **Existing, built. Not touched** (gaps listed below for your decision) | — | Built |
 
@@ -207,7 +207,7 @@ Bugs found in files that existed before the add-only rule. They aren't fixed her
 - Subtitle: "Project name • Assignee name". With more than one assignee, "+N" is added after the first name; with none, it says "Unassigned".
 - Dots: one per day, whatever the count. Red if any task that day is overdue (computed with `isTaskOverdue`). Completed tasks still get the normal dot.
 
-**Phase 7 notes (built 2026-11-13; not committed, awaiting review)**
+**Phase 7 notes (committed 2026-11-13)**
 - New:
   - `features/calendar/application/calendar_providers.dart`: `ledProjectsProvider`, `calendarTasksProvider`, and the pure helpers `monthGrid`, `tasksByDay`, `dayMarker` and `calendarTaskSubtitle`.
   - `features/calendar/application/calendar_selection.dart`: visible month + selected day. Starts on `todayProvider`; tapping a greyed day switches to its month.
