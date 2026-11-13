@@ -58,7 +58,7 @@ final previewEntries = <PreviewEntry>[
   ..._admin([
     ('Projects', '/leader/projects', 'Phase 2', null, true),
     ('Team', '/leader/team', 'Phase 6', 'Bilal is on leave today', true),
-    ('Calendar', '/leader/calendar', 'Placeholder → Phase 7', null, true),
+    ('Calendar', '/leader/calendar', 'Phase 7', 'Nov 9 selected', true),
     (
       'Leave',
       '/leader/leave',

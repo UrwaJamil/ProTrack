@@ -33,7 +33,7 @@ Mock files are in `design/screens/`. Status values: Not started → In progress 
 | Team | `04_admin_team_calendar.jpg` | **Placeholder**: `TeamMembersScreen` (`features/leader/screens/team_members_screen.dart`, `/leader/team`) | 6 | Done (see Phase 6 notes) |
 | Member Profile (opened from Team) | `04_admin_team_calendar.jpg` | **New** screen + new route `/leader/team/:uid` | 6 | Done (see Phase 6 notes) |
 | Notifications (member + admin) | `01_member_task_notif_profile.jpg`, `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `NotificationsScreen` (`features/common/notifications_screen.dart`, `/notifications`) | 8 | Done (see Phase 8 notes) |
-| Calendar | `04_admin_team_calendar.jpg` | **Placeholder**: `CalendarScreen` (`features/leader/screens/calendar_screen.dart`, `/leader/calendar`) | 7 | Not started |
+| Calendar | `04_admin_team_calendar.jpg` | **Placeholder**: `CalendarScreen` (`features/leader/screens/calendar_screen.dart`, `/leader/calendar`) | 7 | Done, awaiting review (see Phase 7 notes) |
 | Analytics | `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `AnalyticsScreen` (`features/leader/screens/analytics_screen.dart`, `/leader/analytics`) | 9 | Not started |
 | Profile (member + admin) | `01_member_task_notif_profile.jpg`, `03_admin_leave_notif_analytics_profile.jpg` | **Existing, built. Not touched** (gaps listed below for your decision) | — | Built |
 
@@ -201,6 +201,52 @@ Bugs found in files that existed before the add-only rule. They aren't fixed her
 
 - Fills the placeholder `CalendarScreen`: custom Monday-first month grid with prev/next, selected-day circle, deadline dots (red if overdue), "Tasks on selected day" (icon, title, project · sprint, status / Overdue pill).
 - New `calendarTasksProvider` merging the existing `projectTasksProvider` for the projects the Admin leads. No rules changes.
+
+**Phase 7 — decided (2026-11-13)**
+- Tasks shown: every task (all have a `deadline`) in **active** projects where you're `leader`. Archived projects are left out, and so are projects where you're a Member.
+- Subtitle: "Project name • Assignee name". With more than one assignee, "+N" is added after the first name; with none, it says "Unassigned".
+- Dots: one per day, whatever the count. Red if any task that day is overdue (computed with `isTaskOverdue`). Completed tasks still get the normal dot.
+
+**Phase 7 notes (built 2026-11-13; not committed, awaiting review)**
+- New:
+  - `features/calendar/application/calendar_providers.dart`: `ledProjectsProvider`, `calendarTasksProvider`, and the pure helpers `monthGrid`, `tasksByDay`, `dayMarker` and `calendarTaskSubtitle`.
+  - `features/calendar/application/calendar_selection.dart`: visible month + selected day. Starts on `todayProvider`; tapping a greyed day switches to its month.
+  - `features/calendar/presentation/calendar_body.dart`.
+  - `features/calendar/presentation/widgets/month_calendar_card.dart`, `calendar_task_tile.dart`.
+  - The month grid is hand-built; no new packages.
+- Existing files changed (approved diffs):
+  - `CalendarScreen`'s import and build body (placeholder exception). The class, constructor, route and CRLF endings are unchanged.
+  - The dev-preview catalog line.
+  - No routes, rules, indexes or pubspec changed.
+- States:
+  - Loading.
+  - Error, with Retry: it re-fetches projects and tasks.
+  - Empty ("No projects you lead").
+  - "No tasks due on this day" for a day with nothing due.
+- Tapping a task opens `/leader/projects/:id/tasks/:taskId`.
+- Accessibility: each day cell is a button labelled like "Friday, Nov 6, 1 task due, overdue", marked selected when chosen. The month title is a live region, and ‹ › have tooltips.
+- Dev preview: Admin › Calendar (Tariq) opens on Nov 9, which has "Review database schema" due. Project Phoenix's tasks don't show, because Tariq is a Member there.
+- Tests:
+  - `flutter analyze` clean.
+  - `flutter test`: 331 passed, 2 skipped, 0 failed. New: `test/calendar/` (logic + screen).
+  - Rules tests: 114 passing, no change to rules.
+  - Checked visually at 390×884 in light and dark.
+
+**Known limitations**
+- The calendar opens one task stream per led project, each kept live while the screen is open. That's fine at team scale. A collection-group query would need a new index and a rules change.
+- Deadlines are compared by local calendar day (like Overdue elsewhere).
+- The selected month and day reset when you leave the tab.
+
+**Differences from the mock (04)**
+- *Grid:*
+  - Today gets an accent ring when it isn't the selected day; the mock shows today only as the selected day.
+  - Greyed neighbouring-month days keep their dots, at half strength.
+  - The grid always shows 6 weeks, so the card height doesn't change from month to month.
+- *Tiles:*
+  - The icon tile shows the task's status icon on its status color (red ⚠ when overdue), not the mock's per-task icons (pencil, flowchart, shield).
+  - The subtitle is "Project • Assignee" (decided) instead of the mock's "Project • Sprint". There's no sprint field.
+  - The status pill is the app's existing `TaskStatusBadge` (icon + label), and overdue tasks show the existing `OverdueBadge`. The mock uses dot pills.
+- *Preview data:* the mock shows three tasks on Nov 9; the preview data has one ("Review database schema", Completed). I left the preview data unchanged so other screens don't shift.
 
 ## Phase 9 — Analytics (FR-2.5 progress; rest FR unknown; screenshot 03)
 
