@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -54,13 +56,21 @@ void main() {
       final container = await _pumpPreview(tester);
       final role = entry.section.role;
       if (role != null) {
-        await tester.runAsync(
-          () => switchPreviewRole(
+        // Not in runAsync: the auth listener starts resolving the profile
+        // in the test's fake-async zone, and login() awaits that same
+        // future, which only completes as fake time is pumped.
+        var switched = false;
+        unawaited(
+          switchPreviewRole(
             current: container.read(authControllerProvider),
             controller: container.read(authControllerProvider.notifier),
             role: role,
-          ),
+          ).whenComplete(() => switched = true),
         );
+        for (var i = 0; i < 50 && !switched; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+        expect(switched, isTrue, reason: 'role switch did not finish');
         await _settle(tester);
       }
       final router = container.read(previewRouterProvider);

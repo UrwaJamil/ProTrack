@@ -272,7 +272,7 @@ void main() {
       await tester.tap(find.text('Mia Member'));
       await tester.pump();
       expect(
-        find.text('Mia Member will be tagged and the task marked Blocked.'),
+        find.text('Mia Member will be notified with this task attached.'),
         findsOneWidget,
       );
       await tester.tap(button);

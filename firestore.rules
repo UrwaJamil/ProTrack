@@ -282,6 +282,64 @@ service cloud.firestore {
       allow read: if signedIn() && request.auth.uid in resource.data.assignedTo;
     }
 
+    // Notifications. Without Cloud Functions the sender's app writes them
+    // (docs/PLAN.md). The sender must share the notification's project
+    // with the recipient and sign as themselves; only known types are
+    // accepted (Phase 8 adds more). The recipient reads, marks read and
+    // deletes their own; nobody else can.
+    match /notifications/{notificationId} {
+      function sharesProject(d) {
+        let ids = get(/databases/$(database)/documents/projects/$(d.projectId))
+          .data.memberIds;
+        return request.auth.uid in ids && d.userId in ids;
+      }
+
+      function validNotification(d) {
+        return d.keys().hasOnly(['userId', 'senderId', 'type', 'projectId',
+            'taskId', 'message', 'read', 'createdAt'])
+          && d.keys().hasAll(['userId', 'senderId', 'type', 'projectId',
+            'message', 'read', 'createdAt'])
+          && d.userId is string && d.projectId is string
+          && d.senderId == request.auth.uid
+          && d.type in ['help_accepted']
+          && d.message is string && d.message.size() > 0
+          && d.message.size() <= 200
+          && d.read == false
+          && d.createdAt == request.time;
+      }
+
+      // Per type. "NAME accepted your help request": only in the same
+      // batch as the sender's `help_accepted` history entry for the
+      // task's current request, at `help_accepted_<requestId>` (so once
+      // per request), and only to the member who asked.
+      function helpAccepted(d) {
+        let requestId = get(/databases/$(database)/documents/projects/$(d.projectId)/tasks/$(d.taskId))
+          .data.helpNote.requestId;
+        return d.taskId is string
+          && notificationId == 'help_accepted_' + requestId
+          && getAfter(/databases/$(database)/documents/projects/$(d.projectId)/tasks/$(d.taskId)/history/$('accept_' + requestId))
+            .data.who == request.auth.uid
+          && get(/databases/$(database)/documents/projects/$(d.projectId)/tasks/$(d.taskId)/history/$(requestId))
+            .data.who == d.userId;
+      }
+
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+
+      allow create: if signedIn()
+        && validNotification(request.resource.data)
+        && sharesProject(request.resource.data)
+        && (request.resource.data.type != 'help_accepted'
+          || helpAccepted(request.resource.data));
+
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['read'])
+        && request.resource.data.read is bool;
+
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
     // TODO(phase 4+): comments, history, messages, leaveRequests,
     // notifications.
     match /{document=**} {

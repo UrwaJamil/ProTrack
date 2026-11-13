@@ -175,7 +175,7 @@ class _NeedHelpFormState extends ConsumerState<NeedHelpForm> {
             Text(
               helperName == null
                   ? 'The task will be marked Blocked.'
-                  : '$helperName will be tagged and the task marked Blocked.',
+                  : '$helperName will be notified with this task attached.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(color: muted),
             ),
