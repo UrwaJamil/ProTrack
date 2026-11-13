@@ -1,7 +1,10 @@
 import '../features/auth/data/app_user.dart';
+import '../features/leave/presentation/leave_paths.dart';
+import '../features/team/presentation/team_paths.dart';
 import '../features/tasks/presentation/task_activity_paths.dart';
 import '../features/tasks/presentation/task_paths.dart';
 import 'mock/mock_activity.dart';
+import 'mock/mock_people.dart';
 import 'mock/mock_projects.dart';
 import 'mock/mock_tasks.dart';
 
@@ -54,9 +57,15 @@ final previewEntries = <PreviewEntry>[
   // ------------------------------------------------------------- Admin
   ..._admin([
     ('Projects', '/leader/projects', 'Phase 2', null, true),
-    ('Team', '/leader/team', 'Placeholder → Phase 6', null, true),
+    ('Team', '/leader/team', 'Phase 6', 'Bilal is on leave today', true),
     ('Calendar', '/leader/calendar', 'Placeholder → Phase 7', null, true),
-    ('Leave', '/leader/leave', 'Placeholder → Phase 6', null, true),
+    (
+      'Leave',
+      '/leader/leave',
+      'Phase 6',
+      'Leave Management: 4 pending, 3 decided',
+      true,
+    ),
     ('Profile', '/leader/profile', 'Phase 1', null, true),
     ('Analytics', '/leader/analytics', 'Placeholder → Phase 9', null, false),
     ('New project', '/leader/projects/new', 'Phase 2', null, false),
@@ -130,6 +139,20 @@ final previewEntries = <PreviewEntry>[
       'As Admin; pre-filled from the existing help note',
       false,
     ),
+    (
+      'Member profile',
+      memberProfilePath(MockPeople.ayesha),
+      'Phase 6',
+      'Ayesha Noor: skills, tasks, Add to project',
+      false,
+    ),
+    (
+      'Member profile: on leave',
+      memberProfilePath(MockPeople.bilal),
+      'Phase 6',
+      'Bilal Siddiqui',
+      false,
+    ),
     ('Notifications', '/notifications', 'Placeholder → Phase 8', null, false),
   ]),
 
@@ -137,7 +160,22 @@ final previewEntries = <PreviewEntry>[
   ..._member([
     ('Projects', '/member/projects', 'Phase 2', null, true),
     ('My Tasks', '/member/tasks', 'Phase 3', null, true),
-    ('Leave', '/member/leave', 'Placeholder → Phase 6', null, true),
+    ('Leave', '/member/leave', 'Phase 6', 'Ayesha: 3 requests', true),
+    ('Request leave', requestLeavePath, 'Phase 6', null, false),
+    (
+      'Leave detail: pending',
+      leaveDetailPath('ayesha-casual'),
+      'Phase 6',
+      'With Cancel request',
+      false,
+    ),
+    (
+      'Leave detail: approved',
+      leaveDetailPath('ayesha-sick'),
+      'Phase 6',
+      null,
+      false,
+    ),
     ('Profile', '/member/profile', 'Phase 1', null, true),
     (
       'Project detail',

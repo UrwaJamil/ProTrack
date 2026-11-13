@@ -12,6 +12,8 @@ import '../features/leader/screens/analytics_screen.dart';
 import '../features/leader/screens/calendar_screen.dart';
 import '../features/leader/screens/leave_requests_screen.dart';
 import '../features/leader/screens/team_members_screen.dart';
+import '../features/leave/presentation/leave_detail_screen.dart';
+import '../features/leave/presentation/leave_request_form_screen.dart';
 import '../features/member/screens/project_chat_screen.dart';
 import '../features/member/screens/request_leave_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
@@ -23,6 +25,7 @@ import '../features/tasks/presentation/need_help_screen.dart';
 import '../features/tasks/presentation/task_activity_screen.dart';
 import '../features/tasks/presentation/task_detail_screen.dart';
 import '../features/tasks/presentation/task_form_screen.dart';
+import '../features/team/presentation/member_profile_screen.dart';
 import '../navigation/leader_shell.dart';
 import '../navigation/member_shell.dart';
 import 'preview_home_screen.dart';
@@ -69,6 +72,21 @@ final previewRouterProvider = Provider<GoRouter>(
       GoRoute(
         path: '/leader/analytics',
         builder: (context, state) => const AnalyticsScreen(),
+      ),
+      // Phase 6 (same as app_router.dart).
+      GoRoute(
+        path: '/member/leave/new',
+        builder: (context, state) => const LeaveRequestFormScreen(),
+      ),
+      GoRoute(
+        path: '/member/leave/:leaveId',
+        builder: (context, state) =>
+            LeaveDetailScreen(leaveId: state.pathParameters['leaveId']!),
+      ),
+      GoRoute(
+        path: '/leader/team/:uid',
+        builder: (context, state) =>
+            MemberProfileScreen(uid: state.pathParameters['uid']!),
       ),
       GoRoute(
         path: '/leader/projects/new',

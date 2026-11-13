@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../leave/application/leave_providers.dart';
 import '../../projects/application/projects_providers.dart';
 import '../data/help_note.dart';
 import '../data/task_activity_repository.dart';
@@ -36,7 +37,8 @@ final taskHelpNoteProvider = StreamProvider.family<HelpNote?, TaskKey>(
 );
 
 /// Need Help's "Who can help?" list ([rankHelpers]) for this task's
-/// project, without the signed-in user.
+/// project, without the signed-in user and anyone on approved leave
+/// today (Phase 6).
 final helperCandidatesProvider =
     Provider.family<AsyncValue<List<HelperCandidate>>, TaskKey>((ref, key) {
       final uid = ref.watch(currentUidProvider) ?? '';
@@ -44,6 +46,7 @@ final helperCandidatesProvider =
       final tasks = ref.watch(projectTasksProvider(key.projectId));
       final memberIds = project.value?.memberIds ?? const <String>[];
       final profiles = ref.watch(userProfilesProvider(profilesKey(memberIds)));
+      final onLeave = ref.watch(onLeaveTodayProvider);
 
       for (final async in [project, tasks, profiles]) {
         if (async.hasError) return AsyncError(async.error!, async.stackTrace!);
@@ -59,6 +62,7 @@ final helperCandidatesProvider =
           profiles: profileMap,
           projectTasks: taskList,
           requesterUid: uid,
+          unavailable: onLeave,
         ),
       );
     });

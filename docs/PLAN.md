@@ -25,12 +25,12 @@ Mock files are in `design/screens/`. Status values: Not started → In progress 
 |---|---|---|---|---|
 | Task Comments + Task History (tabs "Comments (n)" / "History") | `01_member_task_notif_profile.jpg` | **New** screen + new route under the task; one entry button added to existing Task Details | 4 | Done (see Phase 4 notes) |
 | Need Help (opened from Comments/History) | `02_member_leave_help.jpg` | **New** screen + new route | 4 | Done (see Phase 4 notes) |
-| Leave (member) | `02_member_leave_help.jpg` | **Placeholder**: `RequestLeaveScreen` (`features/member/screens/request_leave_screen.dart`, `/member/leave`) | 6 | Not started |
-| Leave Detail (Cancel while pending) | none (decided 2026-11-13) | **New** screen + new route | 6 | Not started |
-| Request Leave | `02_member_leave_help.jpg` | **New** screen + new route; class `LeaveRequestFormScreen` (`RequestLeaveScreen` is already the placeholder's name) | 6 | Not started |
-| Leave Management (admin) | `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `LeaveRequestsScreen` (`features/leader/screens/leave_requests_screen.dart`, `/leader/leave`) | 6 | Not started |
-| Team | `04_admin_team_calendar.jpg` | **Placeholder**: `TeamMembersScreen` (`features/leader/screens/team_members_screen.dart`, `/leader/team`) | 6 | Not started |
-| Member Profile (opened from Team) | `04_admin_team_calendar.jpg` | **New** screen + new route `/leader/team/:uid` | 6 | Not started |
+| Leave (member) | `02_member_leave_help.jpg` | **Placeholder**: `RequestLeaveScreen` (`features/member/screens/request_leave_screen.dart`, `/member/leave`) | 6 | Done (see Phase 6 notes) |
+| Leave Detail (Cancel while pending) | none (decided 2026-11-13) | **New** screen + new route | 6 | Done (see Phase 6 notes) |
+| Request Leave | `02_member_leave_help.jpg` | **New** screen + new route; class `LeaveRequestFormScreen` (`RequestLeaveScreen` is already the placeholder's name) | 6 | Done (see Phase 6 notes) |
+| Leave Management (admin) | `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `LeaveRequestsScreen` (`features/leader/screens/leave_requests_screen.dart`, `/leader/leave`) | 6 | Done (see Phase 6 notes) |
+| Team | `04_admin_team_calendar.jpg` | **Placeholder**: `TeamMembersScreen` (`features/leader/screens/team_members_screen.dart`, `/leader/team`) | 6 | Done (see Phase 6 notes) |
+| Member Profile (opened from Team) | `04_admin_team_calendar.jpg` | **New** screen + new route `/leader/team/:uid` | 6 | Done (see Phase 6 notes) |
 | Notifications (member + admin) | `01_member_task_notif_profile.jpg`, `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `NotificationsScreen` (`features/common/notifications_screen.dart`, `/notifications`) | 8 | Not started |
 | Calendar | `04_admin_team_calendar.jpg` | **Placeholder**: `CalendarScreen` (`features/leader/screens/calendar_screen.dart`, `/leader/calendar`) | 7 | Not started |
 | Analytics | `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `AnalyticsScreen` (`features/leader/screens/analytics_screen.dart`, `/leader/analytics`) | 9 | Not started |
@@ -85,10 +85,21 @@ Bugs found in files that existed before the add-only rule. They aren't fixed her
 
 **Model** (new, `features/leave/data/`): `LeaveRequest`, `LeaveType` (Sick / Casual / Emergency / Other), `LeaveStatus`, `LeaveSettings {allowances, holidays}`; pure `workingDaysBetween(from, to, holidays, halfDay)` and `LeaveBalance` calculators (unit-tested).
 
-**Proposed rules design (confirm at phase start; additive rules for the new `leaveRequests` / `settings` collections):**
-- On submit the app stores `approverIds` = leaders of the requester's projects, minus the requester. Approvers list Pending with `approverIds array-contains uid`.
-- A decision must also name `decidedVia: projectId`. Rules check that `get(project).members[uid] == 'leader'`, that the requester is in that project, and that `uid != userId`. So a forged `approverIds` entry can read the request but can't decide it.
-- Requester: create (pending, own uid, valid dates/type), read own, cancel own pending.
+**Rules (applied 2026-11-13, approved diff; emulator tests in `firestore-tests/test/leave.test.js`):**
+- `leaveRequests/{id}`. **Create:** the requester only, status pending, type sick/casual/emergency/other, `fromDate <= toDate`, `halfDay` only for one day, reason ≤500, `0 < workingDays <= 366`, 1–50 `approverIds` (leaders of the requester's projects, minus the requester), server `createdAt`. **Read:** the requester or anyone in `approverIds`. **Decide:** pending → approved/rejected only; only `status`, `decidedBy`, `decidedVia`, `decidedAt` change; `decidedBy` is the writer, who must be in `approverIds`, a `leader` of `decidedVia` (a project the requester is in), and never the requester. **Delete (= cancel):** the requester, while pending.
+- `leaveDays/{id}`: `{userId, fromDate, toDate}` only, created only in the batch that turns `leaveRequests/{same id}` from pending to approved (values copied from it); any signed-in user may `get`, `list` needs `limit <= 200`; never updated or deleted. The On Leave badge reads it (computed on read; no reason exposed).
+- `settings/leave`: read by signed-in users; **write: false** (console only, see below).
+- `notifications`: optional `leaveId`, new types `leave_approved` / `leave_rejected`, allowed only in the deciding batch, at `leave_<leaveId>`, from the decider to the requester, with `projectId == decidedVia`. "New request" notices to approvers are Phase 8.
+
+**Console step: seed `settings/leave`** (the app falls back to these defaults while the doc is missing). Firebase console → Firestore → Start collection `settings` → document id `leave` → fields:
+- `allowances` (map): `casual` (number) 10, `sick` (number) 8, `emergency` (number) 3
+- `holidays` (array of strings, `YYYY-MM-DD`), e.g. `2026-12-25`. May be empty.
+
+**Phase 6 done criteria (changed 2026-11-13, strict add-only):** the On Leave badge shows on **Team** and **Member Profile** only. The CLAUDE.md row ("members list, task assignee picker, chat participants") is not met by design; see the hooks below.
+
+**Hooks to add later (existing files, each needs an approved edit):**
+- On Leave badge in the project **members list** (`projects/presentation/widgets/team_members_section.dart`) and the task **assignee picker** (`tasks/presentation/widgets/assignee_picker.dart`): add `OnLeaveIndicator(uid: …)` from `features/leave/presentation/widgets/leave_badges.dart`.
+- Chat participants: when Phase 5 builds chat, use the same `OnLeaveIndicator`.
 
 **Screens**
 - Leave (member), filling the placeholder `RequestLeaveScreen`: Used / Remaining / Pending stat tiles, Request Leave button, "My requests" list (date range, working days, type chip, status pill).
@@ -96,6 +107,26 @@ Bugs found in files that existed before the add-only rule. They aren't fixed her
 - Leave Management (admin), filling the placeholder `LeaveRequestsScreen`: "n Pending" badge, Pending / History toggle, request cards (avatar, name, dates, type chip, reason, Reject / Approve).
 - Team, filling the placeholder `TeamMembersScreen`: search field, member rows (avatar, name, role label, "n active tasks", On Leave badge).
 - Member Profile (new, `/leader/team/:uid`): avatar, name, email, role badge, read-only skills, current tasks with status pills, "Add to project" through the existing `ProjectRepository.addMember`.
+
+**Phase 6 notes (committed 2026-11-13)**
+- New: `features/leave/` (models, `LeaveRepository`, providers, balance / working-days / approver / validation logic, Leave tab body, Request Leave, Leave Detail, Leave Management body, widgets), `features/team/` (team providers, Team body, Member Profile, Add to project sheet), `core/widgets/on_leave_badge.dart`.
+- Existing files changed (approved diffs): `firestore.rules` (additive only: vs origin/main no line is removed; the original TODO comment is kept), `lib/routing/app_router.dart` (3 routes), the build bodies of `RequestLeaveScreen`, `LeaveRequestsScreen`, `TeamMembersScreen`, and `helperCandidatesProvider` (people on approved leave today are left out of "Who can help?").
+- Dev preview: `PreviewLeaveRepository` + `MockLeave`; new entries Admin › Team, Leave, Member profile (+ on leave); Member › Leave, Request leave, Leave detail (pending / approved).
+- Tests: `flutter analyze` clean; `flutter test` 287 passed, 2 skipped (the known Project Detail issue + one earlier skip), 0 failed; rules tests 96 passing.
+
+**Known limitations**
+- Approvers are frozen at submit time (`approverIds`). A leader added to the requester's project later doesn't see older requests; a removed one still sees them but can no longer decide (the rules check current leadership of `decidedVia`).
+- Admins (default role `leader`) have no Request Leave screen; the Admin Leave tab is management only, as in the mocks.
+- Overlapping requests aren't prevented. Balance and "no approver" are checked in the app only (rules can't sum requests).
+- Team counts active tasks across the projects the Admin belongs to; Member Profile lists only tasks in those projects (rules don't allow reading others).
+
+**Differences from the mocks**
+- *Leave (member, mock 02):* dates use the app's shared format ("Nov 12 – Nov 14, 2026", not "12 – 14 Nov 2026"). The mock's working-day counts don't match the 2026 calendar ("12 – 14 Nov · 3 working days" ends on a Saturday; "24 – 25 Oct" is a weekend); the app computes them and the preview data uses corrected dates.
+- *Request Leave (mock 02):* added a **Half day** switch (only when start = end), a reason character counter (500 max), the deadline-conflict warning, and an inline red blocking message (over balance / no approver / no working days). The totals row shows the computed "n working days" on the right where the mock just says "Working days". "Other" shows "No yearly limit" in the banner. The type dropdown has a leading icon (field style rule).
+- *Leave Detail:* no mock; follows 02's card style (range, status pill, working days, type chip, reason, requested / decided by), with an outlined red **Cancel request** + confirm dialog while pending.
+- *Leave Management (mock 03):* counts are text in the toggle ("Pending (3)") rather than a separate count bubble; each card adds working days to the date line and, while pending, the requester's tasks due during the leave; History cards show the status pill and "by NAME · date".
+- *Team (mock 04):* same layout; role is Admin/Member by role in the Admin's projects; the On Leave badge sits under "n active tasks" on the right (inline next to the role it overflowed at 390 px).
+- *Member Profile (mock 04):* task rows add the project name and use the existing task status badges (icon + label) instead of the mock's dot pills; the On Leave badge sits next to the role; **Add to project** is disabled with a caption when there's no active project of yours left to add them to.
 
 ---
 
@@ -150,6 +181,12 @@ All questions answered (2026-11-13). Decisions below.
 - **Over-balance requests:** blocked with a clear message. "Other" is never blocked.
 - **No approver available:** blocked with "No approver available. Contact your admin."
 - **Leave detail screen** with Cancel (while pending): built, as a new screen + new route.
+
+**Phase 6 — decided at phase start (2026-11-13)**
+- **On Leave visibility:** a `leaveDays/{id}` mirror with only `{userId, fromDate, toDate}`, written in the approval batch.
+- **Badge on existing screens:** no (strict add-only). Team and Member Profile only; members list / assignee picker listed as hooks.
+- **Leave notifications:** approved / rejected in Phase 6; "new request" to approvers in Phase 8.
+- **`settings/leave`:** read-only in the app (`write: false`); edited in the Firebase console only.
 
 **Phase 8 — decided (2026-11-13)**
 - **Notifications:** new flows (help request, comments, leave decisions) write their own notifications from the sender's app. "Task assigned" waits for the Cloud Functions step; existing task code isn't touched.

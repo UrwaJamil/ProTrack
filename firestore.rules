@@ -296,12 +296,15 @@ service cloud.firestore {
 
       function validNotification(d) {
         return d.keys().hasOnly(['userId', 'senderId', 'type', 'projectId',
-            'taskId', 'message', 'read', 'createdAt'])
+            'taskId', 'leaveId', 'message', 'read', 'createdAt'])
           && d.keys().hasAll(['userId', 'senderId', 'type', 'projectId',
             'message', 'read', 'createdAt'])
           && d.userId is string && d.projectId is string
           && d.senderId == request.auth.uid
-          && d.type in ['help_accepted', 'help_requested']
+          && d.type in ['help_accepted', 'help_requested',
+            'leave_approved', 'leave_rejected']
+          && (!('leaveId' in d)
+            || d.type in ['leave_approved', 'leave_rejected'])
           && d.message is string && d.message.size() > 0
           && d.message.size() <= 200
           && d.read == false
@@ -345,6 +348,24 @@ service cloud.firestore {
           && entry.get('to', '') == d.userId;
       }
 
+      // "NAME approved/rejected your leave": only in the batch that
+      // decides the pending request `leaveId` (Phase 6), at
+      // `leave_<leaveId>`, from the decider to the requester, through the
+      // project the decision names.
+      function leaveDecided(d) {
+        let before = get(/databases/$(database)/documents/leaveRequests/$(d.leaveId)).data;
+        let after = getAfter(/databases/$(database)/documents/leaveRequests/$(d.leaveId)).data;
+        return d.leaveId is string
+          && !('taskId' in d)
+          && notificationId == 'leave_' + d.leaveId
+          && before.status == 'pending'
+          && ((d.type == 'leave_approved' && after.status == 'approved')
+            || (d.type == 'leave_rejected' && after.status == 'rejected'))
+          && after.decidedBy == request.auth.uid
+          && after.decidedVia == d.projectId
+          && after.userId == d.userId;
+      }
+
       allow read: if signedIn() && resource.data.userId == request.auth.uid;
 
       allow create: if signedIn()
@@ -353,7 +374,10 @@ service cloud.firestore {
         && (request.resource.data.type != 'help_accepted'
           || helpAccepted(request.resource.data))
         && (request.resource.data.type != 'help_requested'
-          || helpRequested(request.resource.data));
+          || helpRequested(request.resource.data))
+        && (!(request.resource.data.type in ['leave_approved',
+            'leave_rejected'])
+          || leaveDecided(request.resource.data));
 
       allow update: if signedIn()
         && resource.data.userId == request.auth.uid
@@ -362,6 +386,93 @@ service cloud.firestore {
         && request.resource.data.read is bool;
 
       allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // Leave requests (Phase 6). They hold the reason, so only the
+    // requester and the approvers named at submit time may read them;
+    // teammates see who is on leave through `leaveDays`. Over-balance and
+    // "no approver" are checked in the app (rules can't sum requests).
+    match /leaveRequests/{leaveId} {
+      function validNewLeave(d) {
+        let keys = ['userId', 'type', 'fromDate', 'toDate', 'halfDay',
+          'reason', 'workingDays', 'status', 'approverIds', 'createdAt'];
+        return d.keys().hasOnly(keys) && d.keys().hasAll(keys)
+          && d.userId == request.auth.uid
+          && d.status == 'pending'
+          && d.type in ['sick', 'casual', 'emergency', 'other']
+          && d.fromDate is timestamp && d.toDate is timestamp
+          && d.fromDate <= d.toDate
+          && d.halfDay is bool
+          && (!d.halfDay || d.fromDate == d.toDate)
+          && d.reason is string && d.reason.size() <= 500
+          && d.workingDays is number
+          && d.workingDays > 0 && d.workingDays <= 366
+          && d.approverIds is list
+          && d.approverIds.size() > 0 && d.approverIds.size() <= 50
+          && !(request.auth.uid in d.approverIds)
+          && d.createdAt == request.time;
+      }
+
+      // Approve / reject: an approver who leads `decidedVia`, a project
+      // the requester is in, and never their own request. Only the
+      // decision fields change.
+      function validDecision() {
+        let before = resource.data;
+        let after = request.resource.data;
+        let project = get(/databases/$(database)/documents/projects/$(after.decidedVia)).data;
+        return before.status == 'pending'
+          && after.status in ['approved', 'rejected']
+          && after.diff(before).affectedKeys()
+            .hasOnly(['status', 'decidedBy', 'decidedVia', 'decidedAt'])
+          && after.decidedBy == request.auth.uid
+          && after.decidedAt == request.time
+          && after.decidedVia is string
+          && request.auth.uid != before.userId
+          && request.auth.uid in before.approverIds
+          && project.members.get(request.auth.uid, '') == 'leader'
+          && before.userId in project.memberIds;
+      }
+
+      allow read: if signedIn()
+        && (resource.data.userId == request.auth.uid
+          || request.auth.uid in resource.data.approverIds);
+      allow create: if signedIn() && validNewLeave(request.resource.data);
+      allow update: if signedIn() && validDecision();
+      // Cancel = delete, by the requester, while pending.
+      allow delete: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && resource.data.status == 'pending';
+    }
+
+    // Who is on leave when, without the reason, so any signed-in user can
+    // compute the On Leave badge. Written only in the batch that approves
+    // the request with the same id; never changed afterwards.
+    match /leaveDays/{leaveId} {
+      function approvedNow(d) {
+        let path = /databases/$(database)/documents/leaveRequests/$(leaveId);
+        let after = getAfter(path).data;
+        return get(path).data.status == 'pending'
+          && after.status == 'approved'
+          && after.decidedBy == request.auth.uid
+          && d.userId == after.userId
+          && d.fromDate == after.fromDate
+          && d.toDate == after.toDate;
+      }
+
+      allow get: if signedIn();
+      allow list: if signedIn() && request.query.limit <= 200;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['userId', 'fromDate', 'toDate'])
+        && request.resource.data.keys().hasAll(['userId', 'fromDate', 'toDate'])
+        && approvedNow(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    // Leave allowances and holidays: edited in the Firebase console only
+    // (docs/PLAN.md, Phase 6).
+    match /settings/leave {
+      allow read: if signedIn();
+      allow write: if false;
     }
 
     // TODO(phase 4+): comments, history, messages, leaveRequests,
