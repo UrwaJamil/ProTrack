@@ -32,7 +32,7 @@ Mock files are in `design/screens/`. Status values: Not started → In progress 
 | Leave Management (admin) | `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `LeaveRequestsScreen` (`features/leader/screens/leave_requests_screen.dart`, `/leader/leave`) | 6 | Done (see Phase 6 notes) |
 | Team | `04_admin_team_calendar.jpg` | **Placeholder**: `TeamMembersScreen` (`features/leader/screens/team_members_screen.dart`, `/leader/team`) | 6 | Done (see Phase 6 notes) |
 | Member Profile (opened from Team) | `04_admin_team_calendar.jpg` | **New** screen + new route `/leader/team/:uid` | 6 | Done (see Phase 6 notes) |
-| Notifications (member + admin) | `01_member_task_notif_profile.jpg`, `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `NotificationsScreen` (`features/common/notifications_screen.dart`, `/notifications`) | 8 | Done, awaiting review (see Phase 8 notes) |
+| Notifications (member + admin) | `01_member_task_notif_profile.jpg`, `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `NotificationsScreen` (`features/common/notifications_screen.dart`, `/notifications`) | 8 | Done (see Phase 8 notes) |
 | Calendar | `04_admin_team_calendar.jpg` | **Placeholder**: `CalendarScreen` (`features/leader/screens/calendar_screen.dart`, `/leader/calendar`) | 7 | Not started |
 | Analytics | `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `AnalyticsScreen` (`features/leader/screens/analytics_screen.dart`, `/leader/analytics`) | 9 | Not started |
 | Profile (member + admin) | `01_member_task_notif_profile.jpg`, `03_admin_leave_notif_analytics_profile.jpg` | **Existing, built. Not touched** (gaps listed below for your decision) | — | Built |
@@ -137,7 +137,7 @@ Bugs found in files that existed before the add-only rule. They aren't fixed her
 - Fills the placeholder `NotificationsScreen`: "Notifications" + "n new" chip, Mark all as read, unread tint + dot, per-type icon, title + subtitle/quote, relative time (`core/utils/relative_time.dart`, new file, no `intl`), "You're completely caught up" empty state.
 - Rules (additive, new `notifications` collection) + emulator tests for the sender/recipient checks and read-flag-only updates.
 
-**Phase 8 notes (built 2026-11-13; not committed, awaiting review)**
+**Phase 8 notes (committed 2026-11-13)**
 - New:
   - `features/notifications/data/`: `app_notification.dart` (`AppNotification`, `NotificationType`, `clipText`), `notification_repository.dart` (recipient side only: watch mine, unread count, markRead, markAllRead), `notification_payloads.dart` (`comment_added`, `task_blocked`, `leave_requested` payloads and their fixed ids).
   - `features/notifications/application/`: `notification_center_providers.dart` (list, unread count, `notificationTarget`), `recipients.dart` (`commentRecipients`, `blockedRecipients`, `approverProjects`).
