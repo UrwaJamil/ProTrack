@@ -1,7 +1,7 @@
 # Project Management System (Flutter + Firebase)
 
-Product spec: there is **no `docs/SPEC.md`**. For Phases 3.5–9 the design screenshots in `design/screens/` are the spec, and the decisions below fill the gaps. Phase-by-phase plan: `docs/PLAN.md`.
-This file = decisions, architecture, and build rules. If they conflict, ask me. If behaviour isn't visible in a screenshot or written here, ask — don't invent it.
+Full product spec: `docs/SPEC.md` (read it before starting any phase).
+This file = decisions, architecture, and build rules. If they conflict, ask me.
 
 ## Stack (decided)
 - Flutter (target: Android + Web first; Windows desktop optional)
@@ -31,7 +31,7 @@ each feature: data/ (repositories, models) · application/ (providers) · presen
 Rules: UI never talks to Firestore directly — only through a repository. Repositories are exposed via Riverpod providers.
 
 ## Requirements numbering
-Existing code cites FR numbers (e.g. FR-2.5, FR-3.6) from a spec that isn't in the repo. Keep those references as they are. For new work, cite an FR only if it's already used in the code; otherwise write **"FR unknown"** and cite the screenshot or the decision number here instead. Never invent FR numbers or requirements. When implementing a phase, list the screenshots/decisions it covers and confirm each is satisfied before calling the phase done.
+If `docs/SPEC.md` contains FR-numbered requirements (e.g. FR-1.1, FR-2.3), treat each FR as a precise, testable requirement — more authoritative than the prose sections above it when the two overlap. When implementing a phase, list which FR numbers it covers and confirm each is satisfied before calling the phase done.
 
 ## Key decisions on the spec
 1. **Hybrid role model.** At registration the user picks a default role (Admin or Member, per FR-1.1) — this decides which dashboard they land on right after login/register (FR-1.3) and is stored on `users/{uid}.defaultRole`. The role's stored/code value is exactly `"leader"` for Admin and `"member"` for Member — use `leader`, never `pm`, `pl` or `admin`, anywhere in code, Firestore fields, enum names (`UserRole.leader`), or debug output. Actual permissions are per project: `projects/{id}.members` = map `{uid: "leader" | "member"}` plus `memberIds[]` (for `array-contains` queries). A user's role inside a specific project always follows that project's `members` map, even if it differs from their `defaultRole` (e.g. an Admin added as a member on someone else's project sees that project as a Member). The home screen shows the user's projects grouped by their role in each, and a user can switch which dashboard view they're in.
@@ -56,25 +56,12 @@ Existing code cites FR numbers (e.g. FR-2.5, FR-3.6) from a spec that isn't in t
      - **Update:** a leader edits anything but `createdBy`/`createdAt` (same validation); an assignee who is still a project member may change only `status`, `helpNote`, `subtasks`, `attachments` (+ `updatedAt == request.time`), keeping the subtask count. Nothing is writable while the project is archived. Rules can't loop, so they can't prove an assignee only flipped `done` — the app only toggles it (`setSubtaskDone`, in a transaction).
      - **Admin edits never write `status`** (`TaskDraft.toMap(includeStatus: false)`), so a stale edit form can't overwrite an assignee's change; status goes through the status selector.
      - **Removing a member** also removes them from that project's tasks' `assignedTo`, in the same transaction (`ProjectRepository.removeMember`); the confirm dialog shows the count.
-   - **Comments (Phase 4, `…/tasks/{tid}/comments/{cid}`):** project members read and create (`authorId == uid`, text 1–2000). The author may edit `text` (sets `editedAt`, shown as an "edited" label) or delete their own; a project leader may delete any comment on their project. No attachments until Storage is decided (decision 8) — the attach button is hidden.
-   - **History (Phase 4, `…/tasks/{tid}/history/{hid}`):** project members read; create only with `who == uid` and `at == request.time`, written in the same batch/transaction as the change it records; never updated or deleted.
-   - **Leave and notifications rules:** see decisions 6 and 7.
    - **Users:** any signed-in user may `get` a profile. `list` queries must set `limit <= 30` (the email search, avatar `whereIn` lookups), which makes bulk scraping harder. `emailLower`, when present, must equal `email.trim().lower()`.
    - **Deploying:** `firebase.json` points at `firestore.rules`, so `firebase deploy --only firestore:rules` works. `firestore.indexes.json` holds the My Tasks index (`firebase deploy --only firestore:indexes`). Rules emulator tests live in `firestore-tests/` (`npm install` once, then `npm test` there; needs Java 21+).
 4. **Chat messages live in a subcollection** (`projects/{id}/messages`), never an array in a document. One chat per project, chat id = project id.
 5. **Task comments and history** are subcollections of the task (`comments`, `history`).
-6. **Leave** (Phase 6): `leaveRequests` collection; an approved request in the current date range shows the "On Leave" badge (computed on read, not stored as a flag). The badge appears wherever members are listed (Team, members section, assignee picker, chat participants) even though the screenshots don't show it.
-   - **Types:** `sick | casual | emergency | other`, picked with chips (no dropdown). Labels: Sick, Casual, Emergency, Other.
-   - **Allowances:** yearly, per type, in `settings/leave` (Admin-editable). Defaults: Casual 10, Sick 8, Emergency 3; Other is unlimited and has no balance. Fiscal year = calendar year, no carry-over.
-   - **Day counting:** working days only — Saturday and Sunday excluded, plus dates in the Admin-editable `settings/leave.holidays` list (empty by default). A **Half day** toggle is offered only for single-day requests (0.5 days). `workingDays` is computed in the app and stored on the request.
-   - **Balance:** remaining = allowance − approved days of that type in the year; pending days are shown separately and don't reduce the balance until approved.
-   - **Approval:** any Admin who leads a project the requester belongs to may approve or reject (rejection reason optional). Admins can request leave too; nobody can decide their own request.
-   - **Lifecycle:** `pending → approved | rejected` by an approver; `pending → cancelled` by the requester only. Decided requests are immutable.
-   - **Screens:** Member Leave (stats + My requests), Request Leave, Leave detail (chevron), Admin Leave Management (Pending / History tabs). Both roles' Leave tabs can reach "Request Leave".
-7. **Notifications** (Phase 8): in-app center first (Firestore `notifications`), **written by the client** in the same batch as the action that triggers it, until FCM + Cloud Functions exist. Push (FCM) and scheduled "deadline in 24h" reminders need Cloud Functions, which may need the Blaze plan — do these last and ask me before enabling anything paid.
-   - **Triggers (recipient):** task assigned (new assignees) · comment on my task (assignees, not the commenter) · help requested (the chosen helper, with an **Accept** action) · help accepted (the requester) · task blocked (the project's leaders) · leave submitted (the approvers) · leave approved / rejected (the requester) · leave cancelled (the approvers) · due date changed (assignees).
-   - **Rules:** create only when `actorId == uid`, `userId != uid`, and the sender shares a project with the recipient (checked via the referenced `projectId`) — or, for leave notifications, via the referenced leave request (requester ↔ approver). Recipients may read their own and update **only** `read`; nobody else can update; no deletes for now.
-   - **Help accept flow:** the helper accepts from the notification tile or from a banner on the task. Accepting sets `helpNote.acceptedAt` and, **in the same batch**, writes a `help_accepted` history entry and the requester's notification. The helper must already be a project member. This needs **one narrow task-update rule**: only `helpNote.taggedUserId` may set `helpNote.acceptedAt` (= `request.time`), only while it's unset (once), changing no other field — not even `updatedAt` or other `helpNote` keys. Emulator tests (Phase 4) prove: the helper can set it once; the helper can't change any other field or set it again; other members, the requester and non-members can't set it.
+6. **Leave**: `leaveRequests` collection; an approved request in the current date range shows the "On Leave" badge (computed on read, not stored as a flag).
+7. **Notifications**: build the in-app notification center first (Firestore `notifications`). Push (FCM) and scheduled "deadline in 24h" reminders need Cloud Functions, which may need the Blaze plan — do these last and ask me before enabling anything paid.
 8. Cloud Storage (attachments) may also need Blaze on new projects — verify in console; if unavailable, stub attachments behind a repository interface and defer.
 9. **Auth security additions** (on top of decision 2).
    - **Email availability (register screen only):** Firebase email enumeration protection stays **on**, so the check never uses `fetchSignInMethodsForEmail`. Instead `emailIndex/{email}` docs (id = trimmed, lower-cased email; body exactly `{uid}`) are written in the **same batch** as `users/{uid}` by `UserRepository.create` (email signup and first Google sign-in). Rules: anyone may `get` one doc, nobody may `list`; a signed-in user may only create/update the entry whose id equals their own `request.auth.token.email.lower()`, holding their own uid; no delete. The check runs ~500ms after typing stops or on blur and shows "Checking…" / "Email already in use" / "Available" under the field. It's advisory: it **never** disables Create account, and the real registration attempt stays the source of truth (accounts created before the index existed aren't in it — accepted).
@@ -87,9 +74,7 @@ Existing code cites FR numbers (e.g. FR-2.5, FR-3.6) from a spec that isn't in t
    - **Password reset ("Forgot password?" on login):** opens `/forgot-password` (reachable only while unauthenticated, like `/login`/`/register`; signed-in users are redirected home). The email typed on login is pre-filled via go_router `extra` — **never** a query parameter, so it stays out of URLs and browser history. Sends Firebase's hosted reset email via `AuthController.sendPasswordReset` → `AuthRepository.sendPasswordResetEmail`. To avoid email enumeration, success is always the same neutral message ("If an account exists for this email, a reset link has been sent…") and `user-not-found` is treated as success; only real failures (`invalid-email`, network, `too-many-requests`) show an error. Malformed emails are rejected client-side before any request. Logs only that a reset was requested (plus the error code on failure) — never the email.
 
 ## UI design system
-10. **Visual design, established in the auth screens and refined by the `design/screens/` mockups (Phase 3.5), applies app-wide going forward.**
-    - **Font:** Plus Jakarta Sans, bundled as TTF assets under `assets/fonts/` with its OFL licence file (`assets/fonts/OFL.txt`), set as the theme's `fontFamily`. No `google_fonts` package.
-    - **Status colours** (pill = tinted background + coloured text + leading dot), all in `AppColors` with light/dark pairs: Not Started (grey), In Progress (blue), On Hold (amber), Blocked (amber-red), Completed (green), Overdue (red); leave: Pending (blue), **Approved (blue, as in the mock — not green)**, Rejected (red), Cancelled (grey). Also `unreadTint` (light blue row background for unread notifications) and a destructive tint for Log out.
+10. **Visual design, established in the auth screens, applies app-wide going forward.**
     - **Color tokens** (`lib/app/theme.dart`). Raw light/dark pairs live in `AppPalette` (`primaryLight`/`primaryDark`, `accentLight`/`accentDark`, `backgroundLight`/`backgroundDark`, `surfaceLight`/`surfaceDark`, `borderLight`/`borderDark`, `textPrimaryLight`/`textPrimaryDark`, `textSecondaryLight`/`textSecondaryDark`, `successLight`/`successDark`, `errorLight`/`errorDark`, plus `warningLight`/`warningDark`) and are referenced **only** inside `theme.dart`. Screens read them through the theme:
       - `ColorScheme.primary` — filled buttons, the selected role pill.
       - `ColorScheme.secondary` (= accent) — text links, focused field border; also `AppColors.progressFill`.
@@ -98,7 +83,7 @@ Existing code cites FR numbers (e.g. FR-2.5, FR-3.6) from a spec that isn't in t
       - `ColorScheme.outline` (= border) — card/field borders, dividers; `surfaceContainerHighest` is also the border color (disabled filled buttons, strength-bar track).
       - `ColorScheme.onSurface` (= textPrimary) — primary text; `onSurfaceVariant` (= textSecondary) — hints, placeholders, field icons, secondary text.
       - `ColorScheme.error`.
-      - `AppColors` (`Theme.of(context).appColors`) for roles `ColorScheme` has no slot for: `success` ("Available", met checklist rules, Good/Strong), `warning` (amber, outside the original palette — password "Fair" level and the Blocked task badge), `logoTile` (`backgroundDark` `#121826` in **both** modes, behind the logo), the sidebar/nav chrome on wide layouts (`sidebar*` — primary navy in light mode, surface `#1B2333` with a border edge in dark mode; the phone app bar is light, see decision 11), and the per-status task badge colors (`status*`).
+      - `AppColors` (`Theme.of(context).appColors`) for roles `ColorScheme` has no slot for: `success` ("Available", met checklist rules, Good/Strong), `warning` (amber, outside the original palette — password "Fair" level and the Blocked task badge), `logoTile` (`backgroundDark` `#121826` in **both** modes, behind the logo), the AppBar/nav chrome (`sidebar*` — primary navy in light mode, surface `#1B2333` with a border edge in dark mode), and the per-status task badge colors (`status*`).
       - Never hardcode `Colors.*` / `Color(0x…)` in screens. The only exceptions: `theme.dart` itself, Google's brand colors in `GoogleLogo` (required by Google's branding), and `Colors.transparent`.
     - **Logo:** `assets/Logo.png` (1536×1024, transparent, includes a low-contrast embedded wordmark) is shown only through `AppLogo` (`lib/core/widgets/app_logo.dart`): a rounded-square tile on `AppColors.logoTile`, cropped to the "P" mark (above the embedded wordmark) and inset from the rounded corners. Default 72px (auth header), 96px on the splash. The app name is rendered as real text (`appName` = "ProTrack" in the same file), never taken from the image. Reuse `AppLogo` everywhere the logo appears — don't re-crop or re-embed the image elsewhere. Swap its crop for a plain `Image.asset` once a tight square export exists.
     - **Layout pattern:**
@@ -119,7 +104,6 @@ Existing code cites FR numbers (e.g. FR-2.5, FR-3.6) from a spec that isn't in t
       - **Auth-only, in `lib/features/auth/presentation/widgets/`:**
         - `AuthScaffold` (header + card + optional `footer`), `RoleToggle` and `AuthSwitchLink`.
         - `GoogleSignInSection` (the "OR CONTINUE WITH" divider, Google button and TLS trust line, in `google_sign_in_button.dart`), with `GoogleLogo` alongside it.
-      - **Added in Phase 3.5 (`lib/core/widgets/`):** `PillToggle` gains optional count badges and a compact size and doubles as the segmented tab bar (Comments (3) / History, Pending (3) / History, Light / Dark / System); `StatusPill` gains the leading dot and the new statuses; new `StatTile`, `TagChip` (+ "Add" variant), `SectionCard` (title + trailing caption such as "4 active"), `SettingsRow`, `RoleBadge` (light chip; filled for Admin on the profile header), `CountBadge` ("2 new", "3 Pending"), `InfoBanner`, `DestructiveButton` (Log out: tinted or outlined).
       - **Dashboard chrome:** `ProTrackAppBar` lives in `lib/navigation/`, because it reads auth and notification state.
 
       Follow the same visual language (spacing, radius, type scale) when building screens for Tasks and later phases. Put new shared widgets under `lib/core/widgets/` rather than one-off styling per screen, and move a feature widget there once something outside that feature needs it.
@@ -131,17 +115,7 @@ Existing code cites FR numbers (e.g. FR-2.5, FR-3.6) from a spec that isn't in t
       - Notifications open from the bell in `ProTrackAppBar` (`/notifications`, one route for both roles). The unread dot reads `unreadNotificationCountProvider`, stubbed at 0 until Phase 8.
       - Analytics opens from the Admin's Profile tab (`/leader/analytics`).
     - **Profile tab** (both roles) also holds the theme switcher and Sign out.
-    - **App bar (updated in Phase 3.5 to match the mockups):**
-      - **Phones** (bottom nav): a light bar on the page background — the **page title** on the left (e.g. "Leave", "Team"; pushed screens add a back arrow), then the bell (with unread dot) and the avatar (opens the Profile tab). No logo, app name or search in the bar.
-      - **Wide layouts** (`AdaptiveShell` sidebar): the sidebar keeps the logo + "ProTrack"; the top bar shows the page title, bell and avatar.
-      - Search is deferred (see Phase 7).
-    - **Profile tab (both roles):** avatar header, name with an **edit icon** (inline name editing), email, `RoleBadge`; **My skills** with editable chips and "+ Add skill" (Admins too); **Theme** Light / Dark / System (already persisted by `themeModeProvider`); **Change password** (re-authenticates with the current password; hidden for Google-only accounts; new password follows `password_policy.dart`); Admins also get an **Analytics** row; **Log out**.
-    - **Team tab (Admin):** everyone in projects the Admin leads (union of their `memberIds`, excluding themselves), with search. Each row shows "n active tasks" = tasks not `completed` (Not Started, In Progress, On Hold, Blocked) across projects the Admin leads, plus the On Leave badge. A row opens **Member Profile** (`/leader/team/:uid`): skills (read-only), current tasks, and **Add to project** (picker of projects the Admin leads that the user isn't in; uses `ProjectRepository.addMember`).
-    - **Task Details:** a title card (label "TASK #TSK-7F3K" from `Task.shortId`, title, status chip, project name — no sprint concept) above tabs **Details | Comments (n) | History**, Details being the default and holding the existing info card and subtasks. Tapping the status chip opens the existing status selector (when the user may change status). Comments get a composer pinned to the bottom (send only; attach hidden). History pages in with "load more".
-    - **Need Help** (`…/tasks/:taskId/help`, assignees only): info banner, related-task card, required "What is blocking you?" (max 500, live counter), single-select "Who can help?" = the project's members except me and anyone on approved leave today, sorted by number of skills (most first; skills shown as subtitle), "Request Help" + caption "<name> will receive an immediate ping with this task attached."
-      - Request Help sets the status to **Blocked**, writes `helpNote`, a history entry and the helper's notification. Choosing Blocked in the status selector opens Need Help instead (a reason is required). Moving the task out of Blocked clears `helpNote`.
-    - **Calendar tab (Admin):** month grid (weeks start Monday, prev/next), dots on days with deadlines (red if any are overdue), and "Tasks on selected day" for all tasks in projects the Admin leads.
-    - **Analytics** (`/leader/analytics`): projects the Admin leads only. Stat tiles (Projects, Completed %, Overdue, Blocked), a "Tasks by status" donut with the total in the centre (Completed, In Progress, On Hold, Blocked, and a grey **Not Started** segment), and per-project progress bars. Uses `fl_chart` (approved). No PDF export for now.
+    - **App bar:** logo + "ProTrack", search (a placeholder until Phase 7), bell, avatar (opens the Profile tab).
     - **Project routes:**
       - `/leader/projects/new` and `/leader/projects/:id/edit` are Admin-dashboard only.
       - `/leader/projects/:id` and `/member/projects/:id` render the same `ProjectDetailScreen`.
@@ -161,26 +135,19 @@ projects/{pid} name, description, startDate, deadline, status(active|archived),
 createdBy, members{uid: role}, memberIds[], createdAt, updatedAt
 projects/{pid}/tasks/{tid} title, description, assignedTo[], priority(high|medium|low),
 status(todo|in_progress|on_hold|blocked|completed), deadline,
-helpNote{text, taggedUserId, requestedBy, createdAt, acceptedAt?}, subtasks[{title,done}],
+helpNote{text, taggedUserId?, taggedSkill?}, subtasks[{title,done}],
 attachments[], createdBy, createdAt, updatedAt
-projects/{pid}/tasks/{tid}/comments/{cid} authorId, text, createdAt, editedAt?
-projects/{pid}/tasks/{tid}/history/{hid} who, action, from?, to?, at
+projects/{pid}/tasks/{tid}/comments/{cid}
+projects/{pid}/tasks/{tid}/history/{hid} who, action, from, to, at
 projects/{pid}/messages/{mid} text, senderId, createdAt, mentions[], attachments[], pinned
-leaveRequests/{lid} userId, type(sick|casual|emergency|other), fromDate, toDate, halfDay,
-workingDays, reason, status(pending|approved|rejected|cancelled),
-approverIds[], decidedBy?, decidedAt?, rejectionReason?, createdAt
-settings/leave allowances{casual, sick, emergency}, holidays[], updatedBy, updatedAt
-notifications/{nid} userId, actorId, type, projectId?, taskId?, leaveId?, message, read, createdAt
-
-Note: `helpNote` has no `taggedSkill` (dropped — the helper is always a person; their skills are shown, not stored). `helpNote` is null unless the task is Blocked.
-
-Note: `approverIds` (and how the leave read/decision rules use it) is a Phase 6 proposal in `docs/PLAN.md`, to be confirmed at the start of that phase.
+leaveRequests/{lid} userId, fromDate, toDate, reason, status(pending|approved|rejected), decidedBy
+notifications/{nid} userId, type, projectId?, taskId?, message, read, createdAt
 
 Note: `users.emailLower` (= `email.trim().toLowerCase()`) is the "Assign Team Member" prefix-search key. It's written at signup and back-filled on the next sign-in for older profiles. The query `orderBy('emailLower').startAt([q]).endAt([q+'']).limit(10)` uses Firestore's automatic single-field index, so it needs no composite index. The project list query (`memberIds array-contains uid`) is sorted in the app, so it needs no index either.
 
 Note: tasks are a subcollection of the project (not top-level) so rules and queries stay simple. "My Tasks across all projects" is `collectionGroup('tasks').where('assignedTo', arrayContains: uid)`, sorted in the app, so it needs no composite index — only a collection-group single-field index (Arrays / array-contains) on `tasks.assignedTo`, defined in `firestore.indexes.json`.
 
-Note — task status display vs. stored (FR-3.6): `TaskStatus.label` bridges them like `UserRole.label`: `todo` → "Not Started", `in_progress` → "In Progress", `on_hold` → "On Hold", `completed` → "Completed". `blocked` ("Blocked") is a separate "needs help" state: from Phase 4 it's in the status selector, but choosing it opens Need Help (a blocker reason is required), and leaving it clears `helpNote` (decision 11). On Hold has its own badge colors (`statusOnHold*` in `AppColors`). Overdue (computed on read): deadline day passed and not completed.
+Note — task status display vs. stored (FR-3.6): `TaskStatus.label` bridges them like `UserRole.label`: `todo` → "Not Started", `in_progress` → "In Progress", `on_hold` → "On Hold", `completed` → "Completed". `blocked` ("Blocked") is a separate "needs help" state reserved for Phase 4's help-note flow, so it isn't in `TaskStatus.choosable` yet. On Hold has its own badge colors (`statusOnHold*` in `AppColors`). Overdue (computed on read): deadline day passed and not completed.
 
 ## Build phases (do ONE phase at a time, stop after each)
 | # | Phase | Done when |
@@ -189,20 +156,16 @@ Note — task status display vs. stored (FR-3.6): `TaskStatus.label` bridges the
 | 1 | Auth: register/login/logout, user doc, profile with skill tags, auth-gated router | I can register, log in, and stay logged in after restart |
 | 2 | Projects: create/edit/archive project, add/remove members (search by email), project list with progress % | Admin creates a project and adds a member who then sees it |
 | 3 | Tasks: create/edit/delete/reassign (Admin), per-task deadline + priority, status updates (assignee), overdue highlight, Member "My Tasks" screen, Firestore rules for permissions | Member can edit only their own tasks; rules verified in emulator/tests |
-| 3.5 | Design pass: Plus Jakarta Sans, palette/status colours, new shared widgets, phone app bar, Profile redesign (both roles) incl. name edit, skills, theme, Change password | Screens match `design/screens/` styling in light + dark; widget tests pass |
-| 4 | Blocked/Help: Need Help screen (pick a helper), status Blocked + help note, help accept flow, Task Details tabs, comments, task history (sub-tasks already done) | Blocked note visible to Admin and team; comments + history rules verified in emulator |
-| 5 | Project chat: realtime messages, @mentions, pin, image/file share (if storage available) — *not in the current mockups; order TBD* | Two accounts chat in realtime, one chat per project |
-| 6 | Leave + Team: request (types, half day, balances, holidays) → Admin approve/reject/cancel → On Leave badge everywhere members are listed + deadline-conflict warning; Team tab + Member Profile + Add to project; leave settings | Badge shows in members list, task assignee picker, chat participants; leave rules verified in emulator |
-| 7 | Calendar of deadlines only. Kanban, search/filters, favorites are **deferred** | Calendar shows every deadline in projects I lead |
-| 8 | Notifications: in-app center (client-written, decision 7) incl. help Accept action; FCM push later | Assigned task → assignee sees notification; rules verified in emulator |
-| 9 | Analytics (`fl_chart`), polish, empty/error/loading states. PDF report deferred | Analytics matches the mock for projects I lead |
-
-Build order: 3.5 → 4 → 6 → 8 → 7 → 9 (Phase 5 chat is not scheduled yet).
+| 4 | Blocked/Help: status Blocked + help note + tag person/skill, "suggested helpers" by skill tag, sub-tasks, task comments, task history | Blocked note visible to Admin and team |
+| 5 | Project chat: realtime messages, @mentions, pin, image/file share (if storage available) | Two accounts chat in realtime, one chat per project |
+| 6 | Leave: request → Admin approve/reject → On Leave badge everywhere members are listed + deadline-conflict warning | Badge shows in members list, task assignee picker, chat participants |
+| 7 | Views: Kanban (drag & drop), calendar of deadlines, search/filters, favorites, archive | Dragging a card changes status (respecting permissions) |
+| 8 | Notifications: in-app center first, then FCM push | Assigned task → assignee sees notification |
+| 9 | Analytics + PDF weekly report, polish, empty/error/loading states | Report exports |
 
 ## Working rules for Claude Code
 - Start each phase with a short plan (files to create/change) and wait for my OK.
 - Small, working increments. After each step run `flutter analyze` and fix issues; run `flutter test` when tests exist.
-- Each phase ships data model + repository + Firestore rules + emulator tests + UI together. A phase is **not done** until `flutter analyze` is clean, `flutter test` passes and (if rules changed) `npm test` in `firestore-tests/` passes. If any of these can't be run (e.g. no JDK 21), say so explicitly and leave the phase open.
 - Never commit secrets. `firebase_options.dart` is fine to commit; service-account keys are not.
 - Every screen needs loading, empty, and error states.
 - Don't add packages without saying why. Prefer well-maintained ones (check pub.dev score).
