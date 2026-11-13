@@ -19,6 +19,8 @@ import '../features/projects/presentation/project_detail_screen.dart';
 import '../features/projects/presentation/project_form_screen.dart';
 import '../features/projects/presentation/projects_overview_screen.dart';
 import '../features/tasks/presentation/my_tasks_screen.dart';
+import '../features/tasks/presentation/need_help_screen.dart';
+import '../features/tasks/presentation/task_activity_screen.dart';
 import '../features/tasks/presentation/task_detail_screen.dart';
 import '../features/tasks/presentation/task_form_screen.dart';
 import '../navigation/leader_shell.dart';
@@ -104,6 +106,7 @@ final previewRouterProvider = Provider<GoRouter>(
                   taskId: state.pathParameters['taskId']!,
                 ),
               ),
+              ..._taskActivityRoutes(),
             ],
           ),
         ],
@@ -119,6 +122,7 @@ final previewRouterProvider = Provider<GoRouter>(
               projectId: state.pathParameters['projectId']!,
               taskId: state.pathParameters['taskId']!,
             ),
+            routes: _taskActivityRoutes(),
           ),
           GoRoute(
             path: 'chat',
@@ -162,3 +166,22 @@ final previewRouterProvider = Provider<GoRouter>(
 StatefulShellBranch _tab(String path, Widget screen) => StatefulShellBranch(
   routes: [GoRoute(path: path, builder: (context, state) => screen)],
 );
+
+/// Phase 4: Comments / History and Need Help under a task, on both
+/// dashboards (same as `app_router.dart`).
+List<GoRoute> _taskActivityRoutes() => [
+  GoRoute(
+    path: 'activity',
+    builder: (context, state) => TaskActivityScreen(
+      projectId: state.pathParameters['projectId']!,
+      taskId: state.pathParameters['taskId']!,
+    ),
+  ),
+  GoRoute(
+    path: 'help',
+    builder: (context, state) => NeedHelpScreen(
+      projectId: state.pathParameters['projectId']!,
+      taskId: state.pathParameters['taskId']!,
+    ),
+  ),
+];

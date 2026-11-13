@@ -72,7 +72,10 @@ void main() {
       await _settle(tester);
 
       expect(tester.takeException(), isNull);
-      expect(router.routerDelegate.currentConfiguration.uri.path, entry.path);
+      // `push` doesn't change currentConfiguration.uri (go_router keeps the
+      // URL at the base location for imperative pushes), so read the
+      // top-most route's state instead.
+      expect(router.state.uri.path, entry.path);
       expect(find.text('ProTrack screen preview'), findsNothing);
       expect(find.byKey(const ValueKey('preview-back-to-list')), findsOne);
     });

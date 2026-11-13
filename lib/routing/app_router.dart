@@ -21,6 +21,8 @@ import '../features/projects/presentation/project_detail_screen.dart';
 import '../features/projects/presentation/project_form_screen.dart';
 import '../features/projects/presentation/projects_overview_screen.dart';
 import '../features/tasks/presentation/my_tasks_screen.dart';
+import '../features/tasks/presentation/need_help_screen.dart';
+import '../features/tasks/presentation/task_activity_screen.dart';
 import '../features/tasks/presentation/task_detail_screen.dart';
 import '../features/tasks/presentation/task_form_screen.dart';
 import '../navigation/leader_shell.dart';
@@ -107,6 +109,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   taskId: state.pathParameters['taskId']!,
                 ),
               ),
+              ..._taskActivityRoutes(),
             ],
           ),
         ],
@@ -122,6 +125,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               projectId: state.pathParameters['projectId']!,
               taskId: state.pathParameters['taskId']!,
             ),
+            routes: _taskActivityRoutes(),
           ),
           GoRoute(
             path: 'chat',
@@ -166,6 +170,26 @@ final routerProvider = Provider<GoRouter>((ref) {
 StatefulShellBranch _tab(String path, Widget screen) => StatefulShellBranch(
   routes: [GoRoute(path: path, builder: (context, state) => screen)],
 );
+
+/// Phase 4: Comments / History and Need Help under a task, on both
+/// dashboards. What each screen allows comes from the project's `members`
+/// map, never the route.
+List<GoRoute> _taskActivityRoutes() => [
+  GoRoute(
+    path: 'activity',
+    builder: (context, state) => TaskActivityScreen(
+      projectId: state.pathParameters['projectId']!,
+      taskId: state.pathParameters['taskId']!,
+    ),
+  ),
+  GoRoute(
+    path: 'help',
+    builder: (context, state) => NeedHelpScreen(
+      projectId: state.pathParameters['projectId']!,
+      taskId: state.pathParameters['taskId']!,
+    ),
+  ),
+];
 
 /// Pure auth gate behind [routerProvider]'s `redirect`; `null` means stay.
 String? authRedirect(AuthState auth, String location) {

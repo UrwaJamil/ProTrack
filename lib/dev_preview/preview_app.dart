@@ -42,8 +42,13 @@ class _BackToListButton extends StatelessWidget {
     return ListenableBuilder(
       listenable: router.routerDelegate,
       builder: (context, _) {
-        final path = router.routerDelegate.currentConfiguration.uri.path;
-        if (path == previewHomePath) return const SizedBox.shrink();
+        // A pushed screen doesn't change `uri` (go_router keeps the URL at
+        // the base location for imperative pushes) but adds a match, so the
+        // list is showing only when it's the sole match.
+        final config = router.routerDelegate.currentConfiguration;
+        final atList =
+            config.uri.path == previewHomePath && config.matches.length == 1;
+        if (atList) return const SizedBox.shrink();
         return Positioned(
           left: 12,
           bottom: 96,

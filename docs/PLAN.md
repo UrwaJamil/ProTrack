@@ -23,8 +23,8 @@ Mock files are in `design/screens/`. Status values: Not started → In progress 
 
 | Screen | Mock file | New or placeholder | Phase | Status |
 |---|---|---|---|---|
-| Task Comments + Task History (tabs "Comments (n)" / "History") | `01_member_task_notif_profile.jpg` | **New** screen + new route under the task; one entry button added to existing Task Details | 4 | Not started |
-| Need Help (opened from Comments/History) | `02_member_leave_help.jpg` | **New** screen + new route | 4 | Not started |
+| Task Comments + Task History (tabs "Comments (n)" / "History") | `01_member_task_notif_profile.jpg` | **New** screen + new route under the task; one entry button added to existing Task Details | 4 | Done (see Phase 4 notes) |
+| Need Help (opened from Comments/History) | `02_member_leave_help.jpg` | **New** screen + new route | 4 | Done (see Phase 4 notes) |
 | Leave (member) | `02_member_leave_help.jpg` | **Placeholder**: `RequestLeaveScreen` (`features/member/screens/request_leave_screen.dart`, `/member/leave`) | 6 | Not started |
 | Leave Detail (Cancel while pending) | none (decided 2026-11-13) | **New** screen + new route | 6 | Not started |
 | Request Leave | `02_member_leave_help.jpg` | **New** screen + new route; class `LeaveRequestFormScreen` (`RequestLeaveScreen` is already the placeholder's name) | 6 | Not started |
@@ -57,6 +57,14 @@ Mock files are in `design/screens/`. Status values: Not started → In progress 
 - Existing Task Details: one entry button to the activity screen (diff first).
 
 **Tests:** model round-trips, helper-ranking unit test, composer widget test. Emulator: comments CRUD by author / leader / outsider; history create-only (no update or delete).
+
+**Phase 4 notes (committed 2026-11-13)**
+- Built: comments (post / edit own / delete own or as Admin), history (help requests and accepts only; existing flows don't write history yet), Need Help (sets Blocked + `helpNote {text, taggedUserId, requestId}` + a `help_requested` entry in one batch), and "I can help" for the named helper (`help_accepted` entry at `accept_<requestId>`, once per request, plus a notification for the requester, in one batch).
+- `helpNote` is read and written only by `TaskActivityRepository`; the existing `Task` model and `TaskRepository` are unchanged.
+- Rules added: `comments` and `history` blocks under tasks (emulator tests in `firestore-tests/test/activity.test.js`).
+- **Open: the `notifications` rule isn't applied yet.** Without it the catch-all denies the notification, so the whole "I can help" batch fails against real Firestore. The proposed block and its 8 emulator tests are drafted and pass, awaiting approval.
+- **Open: dev-preview smoke test.** Its failures predate Phase 4 (16 on clean HEAD). The cause, `push` not changing `currentConfiguration.uri`, is fixed in the test and in the preview's "Screens" button. A few entries (e.g. Member › Leave) still fail and are being investigated.
+- "Who can help?" counts active tasks in this project only (rules don't let the requester read other projects' tasks).
 
 ---
 

@@ -185,6 +185,92 @@ service cloud.firestore {
         allow update: if leaderUpdate() || assigneeUpdate();
 
         allow delete: if isLeader() && projectActive();
+
+        // Comments (Phase 4, CLAUDE.md decision 5). Project members read
+        // and post while the project is active; the author may change only
+        // the text; the author or a project Admin deletes.
+        match /comments/{commentId} {
+          function validText(t) {
+            return t is string && t.trim().size() > 0 && t.size() <= 2000;
+          }
+
+          allow read: if isMember();
+
+          allow create: if isMember() && projectActive()
+            && exists(/databases/$(database)/documents/projects/$(projectId)/tasks/$(taskId))
+            && request.resource.data.keys()
+              .hasOnly(['authorId', 'text', 'createdAt'])
+            && request.resource.data.authorId == request.auth.uid
+            && validText(request.resource.data.text)
+            && request.resource.data.createdAt == request.time;
+
+          allow update: if isMember() && projectActive()
+            && resource.data.authorId == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['text', 'editedAt'])
+            && validText(request.resource.data.text)
+            && request.resource.data.editedAt == request.time;
+
+          allow delete: if projectActive()
+            && (isLeader()
+              || (isMember() && resource.data.authorId == request.auth.uid));
+        }
+
+        // History (Phase 4): create-only, never edited or deleted. An
+        // entry names its writer (`who == uid`), so nobody can log an
+        // action as someone else.
+        // * A project Admin or the task's assignee writes any action but
+        //   `help_accepted`. Phase 4 writes `help_requested` (in the same
+        //   batch as the Blocked status + help note, with the entry id
+        //   stored as `helpNote.requestId`); the other actions are reserved
+        //   for history from the existing flows.
+        // * `help_accepted` is written only by the helper named in the
+        //   task's `helpNote.taggedUserId` (a project member, not an
+        //   assignee), at the fixed id `accept_<helpNote.requestId>`. A
+        //   second accept of the same request would be an update, which
+        //   is never allowed, so each request is accepted at most once.
+        match /history/{entryId} {
+          function taskDoc() {
+            return get(/databases/$(database)/documents/projects/$(projectId)/tasks/$(taskId)).data;
+          }
+
+          function optionalString(d, key) {
+            return !(key in d) || d[key] is string;
+          }
+
+          allow read: if isMember();
+
+          function validEntry(d) {
+            return d.keys().hasOnly(['who', 'action', 'from', 'to', 'at'])
+              && d.who == request.auth.uid
+              && optionalString(d, 'from')
+              && optionalString(d, 'to')
+              && d.at == request.time;
+          }
+
+          function assigneeOrLeaderEntry(d) {
+            return (isLeader() || request.auth.uid in taskDoc().assignedTo)
+              && d.action in ['created', 'status_changed', 'edited',
+                'reassigned', 'subtask_completed', 'help_requested'];
+          }
+
+          function helperAccepts(d) {
+            let note = taskDoc().get('helpNote', {});
+            return d.action == 'help_accepted'
+              && note.get('taggedUserId', '') == request.auth.uid
+              && note.get('requestId', '') is string
+              && note.get('requestId', '') != ''
+              && entryId == 'accept_' + note.requestId
+              && !(request.auth.uid in taskDoc().assignedTo);
+          }
+
+          allow create: if isMember() && projectActive()
+            && validEntry(request.resource.data)
+            && (assigneeOrLeaderEntry(request.resource.data)
+              || helperAccepts(request.resource.data));
+
+          allow update, delete: if false;
+        }
       }
     }
 

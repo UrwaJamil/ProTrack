@@ -6,11 +6,14 @@ import '../features/auth/data/email_availability_repository.dart';
 import '../features/auth/data/user_repository.dart';
 import '../features/projects/application/projects_providers.dart';
 import '../features/projects/data/project_repository.dart';
+import '../features/tasks/data/task_activity_repository.dart';
 import '../features/tasks/data/task_repository.dart';
 import 'fakes/preview_auth_repository.dart';
 import 'fakes/preview_project_repository.dart';
+import 'fakes/preview_task_activity_repository.dart';
 import 'fakes/preview_task_repository.dart';
 import 'fakes/preview_user_repository.dart';
+import 'mock/mock_activity.dart';
 import 'mock/mock_people.dart';
 import 'mock/mock_projects.dart';
 import 'mock/mock_tasks.dart';
@@ -41,6 +44,14 @@ List<Override> previewOverrides({UserRole signedInAs = UserRole.leader}) {
     ),
     projectRepositoryProvider.overrideWithValue(projects),
     taskRepositoryProvider.overrideWithValue(tasks),
+    taskActivityRepositoryProvider.overrideWithValue(
+      PreviewTaskActivityRepository(
+        tasks,
+        comments: MockActivity.comments,
+        history: MockActivity.history,
+        helpNotes: MockActivity.helpNotes,
+      ),
+    ),
     todayProvider.overrideWithValue(mockToday),
   ];
 }

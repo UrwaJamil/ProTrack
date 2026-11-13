@@ -1,5 +1,7 @@
 import '../features/auth/data/app_user.dart';
+import '../features/tasks/presentation/task_activity_paths.dart';
 import '../features/tasks/presentation/task_paths.dart';
+import 'mock/mock_activity.dart';
 import 'mock/mock_projects.dart';
 import 'mock/mock_tasks.dart';
 
@@ -44,6 +46,7 @@ class PreviewEntry {
 
 const _mobile = MockProjects.mobileApp;
 const _login = MockTasks.designLogin;
+const _api = MockActivity.apiSpecs;
 
 /// Every screen, both roles. **Each phase adds its new screens here** (and
 /// their routes to `preview_router.dart`).
@@ -106,6 +109,27 @@ final previewEntries = <PreviewEntry>[
       false,
     ),
     ('Edit task', editTaskPath(_mobile, _login), 'Phase 3', null, false),
+    (
+      'Task comments / history',
+      taskActivityPath(_mobile, _login, adminView: true),
+      'Phase 4',
+      'Design login flow: 3 comments, empty history',
+      false,
+    ),
+    (
+      'Task comments / history: blocked',
+      taskActivityPath(_mobile, _api, adminView: true),
+      'Phase 4',
+      'API integration specs: help note + history entry',
+      false,
+    ),
+    (
+      'Need help',
+      taskHelpPath(_mobile, _api, adminView: true),
+      'Phase 4',
+      'As Admin; pre-filled from the existing help note',
+      false,
+    ),
     ('Notifications', '/notifications', 'Placeholder → Phase 8', null, false),
   ]),
 
@@ -126,6 +150,20 @@ final previewEntries = <PreviewEntry>[
       'Task detail',
       taskDetailPath(_mobile, _login, adminView: false),
       'Phase 3',
+      'Design login flow (assignee)',
+      false,
+    ),
+    (
+      'Task comments / history',
+      taskActivityPath(_mobile, _login, adminView: false),
+      'Phase 4',
+      'Design login flow (assignee)',
+      false,
+    ),
+    (
+      'Need help',
+      taskHelpPath(_mobile, _login, adminView: false),
+      'Phase 4',
       'Design login flow (assignee)',
       false,
     ),
