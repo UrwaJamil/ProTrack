@@ -67,7 +67,7 @@ final previewEntries = <PreviewEntry>[
       true,
     ),
     ('Profile', '/leader/profile', 'Phase 1', null, true),
-    ('Analytics', '/leader/analytics', 'Placeholder → Phase 9', null, false),
+    ('Analytics', '/leader/analytics', 'Phase 9', 'Active projects I lead', false),
     ('New project', '/leader/projects/new', 'Phase 2', null, false),
     (
       'Project detail',

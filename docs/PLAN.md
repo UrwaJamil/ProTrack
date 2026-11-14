@@ -34,7 +34,7 @@ Mock files are in `design/screens/`. Status values: Not started → In progress 
 | Member Profile (opened from Team) | `04_admin_team_calendar.jpg` | **New** screen + new route `/leader/team/:uid` | 6 | Done (see Phase 6 notes) |
 | Notifications (member + admin) | `01_member_task_notif_profile.jpg`, `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `NotificationsScreen` (`features/common/notifications_screen.dart`, `/notifications`) | 8 | Done (see Phase 8 notes) |
 | Calendar | `04_admin_team_calendar.jpg` | **Placeholder**: `CalendarScreen` (`features/leader/screens/calendar_screen.dart`, `/leader/calendar`) | 7 | Done (see Phase 7 notes) |
-| Analytics | `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `AnalyticsScreen` (`features/leader/screens/analytics_screen.dart`, `/leader/analytics`) | 9 | Not started |
+| Analytics | `03_admin_leave_notif_analytics_profile.jpg` | **Placeholder**: `AnalyticsScreen` (`features/leader/screens/analytics_screen.dart`, `/leader/analytics`) | 9 | Done (see Phase 9 notes) |
 | Profile (member + admin) | `01_member_task_notif_profile.jpg`, `03_admin_leave_notif_analytics_profile.jpg` | **Existing, built. Not touched** (gaps listed below for your decision) | — | Built |
 
 ---
@@ -254,6 +254,60 @@ Bugs found in files that existed before the add-only rule. They aren't fixed her
 - New `features/reports/`: `analyticsProvider` (counts per status, completed %, overdue, blocked) over the projects I lead.
 - Fills the placeholder `AnalyticsScreen`: Projects / Completed % / Overdue / Blocked tiles, "Tasks by status" donut with total in the center + legend, "Project progress" bars.
 - Loading / empty / error states on every new or filled screen.
+
+**Phase 9 — decided (2026-11-13)**
+- Scope: active projects you lead. These are the Phase 7 `ledProjectsProvider` / `calendarTasksProvider`, reused, so there are no new queries.
+- AppBar title: keep the existing "Analytics & reports" (the mock says "Analytics").
+- Donut colors: Blocked is amber (same as the Blocked badge and tile). Red is used only for the Overdue number.
+- Project progress order: the same as the project list (newest first).
+
+**How Analytics is reached (existing, unchanged)**
+- Profile tab → settings card → **"Analytics & reports"** row (`profile_settings_section.dart`), which does `context.push('/leader/analytics')`.
+- The row is shown only when `profile.defaultRole == leader` (`profile_screen.dart`).
+- `/leader/analytics` is a top-level route outside the tab shell (`app_router.dart`). `authRedirect` sends Member sessions away from `/leader/*`.
+- There's no Analytics tab (CLAUDE.md decision 11). No other screen or menu links to it, and none was added.
+
+**Phase 9 notes (committed 2026-11-14)**
+- New:
+  - `features/reports/application/analytics_providers.dart`: `TeamAnalytics`, the pure `computeAnalytics`, and `analyticsProvider`.
+  - `features/reports/presentation/analytics_body.dart`.
+  - `features/reports/presentation/widgets/stat_tile.dart` (`StatTile`, `StatGrid`), `tasks_by_status_card.dart` (fl_chart `PieChart` donut + legend), `project_progress_card.dart`.
+- Existing files changed (approved diffs):
+  - `pubspec.yaml`: adds `fl_chart: ^1.3.1`.
+  - `pubspec.lock`: only the `fl_chart 1.3.1` and `equatable 3.0.0` (transitive) entries; no existing package changed version; CRLF kept.
+  - `AnalyticsScreen`'s import and Scaffold `body` (placeholder exception). The class, constructor, AppBar and CRLF are unchanged.
+  - The dev-preview catalog line.
+  - No routes, rules, indexes, Profile or shell changes.
+- Numbers:
+  - Completed % = completed ÷ all tasks, rounded down like FR-2.5.
+  - Overdue uses `isTaskOverdue`, so completed tasks never count.
+  - Per-project % uses `computeProgress`, so it matches the project cards.
+- States: loading; error with Retry (re-fetches projects and tasks); empty ("No projects you lead"); and no tasks yet (zeros, empty grey ring, "0 Total Tasks").
+- Accessibility: each tile reads "Overdue: 2". The donut reads as one summary ("11 tasks: 4 Completed, 3 In Progress, …"). Project rows are buttons labelled "Name, 33% complete" that open the project.
+- Dev preview: Admin › Analytics (Tariq) shows 3 projects and 11 tasks. Legacy (archived) and Phoenix (where Tariq is a Member) are left out.
+- Tests:
+  - `flutter analyze` clean.
+  - `flutter test`: 342 passed, 2 skipped, 0 failed. New: `test/reports/` (logic + screen).
+  - Rules tests: 114 passing, with no rules change. One earlier run hit mocha's 15 s timeout on a loaded machine (87 passing / 3 failing / setup hooks timed out), and a clean re-run passed.
+  - Checked visually at 390×884 in light and dark.
+
+**Known limitations**
+- Same live per-project task streams as the Calendar (one per led project).
+- No date range or export yet. The "weekly PDF report" in CLAUDE.md's Phase 9 row isn't part of this mock-based screen; it's listed below as a hook.
+
+**Hooks to add later**
+- Weekly PDF report export (CLAUDE.md Phase 9 "Report exports"). It needs a PDF package, which needs your OK.
+- If you want Analytics reachable from somewhere other than Profile (e.g. a dashboard link), that's an edit to an existing file. Your call.
+
+**Differences from the mock (03)**
+- *AppBar:* "Analytics & reports" (existing title, kept) instead of "Analytics". The bell and avatar aren't shown, because it's the existing full-screen route with a back arrow.
+- *Donut colors:*
+  - Blocked is amber, not red (decided).
+  - On Hold uses its status token: navy in light mode, very light in dark mode. The mock has amber for On Hold.
+  - Not Started is grey; the mock has no Not Started segment.
+- *Tiles:* the icons are Material equivalents (folder, check, clock, alert). The Completed % number isn't tinted.
+- *Legend:* Not Started is a fifth entry (it was in the request), so the 2-column legend has a third row.
+- *Preview data:* the totals (11 tasks, 3 projects) are the preview's own data, not the mock's 124 / 8.
 
 ---
 
