@@ -14,6 +14,8 @@ import '../features/leader/screens/analytics_screen.dart';
 import '../features/leader/screens/calendar_screen.dart';
 import '../features/leader/screens/leave_requests_screen.dart';
 import '../features/leader/screens/team_members_screen.dart';
+import '../features/leave/presentation/leave_detail_screen.dart';
+import '../features/leave/presentation/leave_request_form_screen.dart';
 import '../features/member/screens/project_chat_screen.dart';
 import '../features/member/screens/request_leave_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
@@ -21,8 +23,11 @@ import '../features/projects/presentation/project_detail_screen.dart';
 import '../features/projects/presentation/project_form_screen.dart';
 import '../features/projects/presentation/projects_overview_screen.dart';
 import '../features/tasks/presentation/my_tasks_screen.dart';
+import '../features/tasks/presentation/need_help_screen.dart';
+import '../features/tasks/presentation/task_activity_screen.dart';
 import '../features/tasks/presentation/task_detail_screen.dart';
 import '../features/tasks/presentation/task_form_screen.dart';
+import '../features/team/presentation/member_profile_screen.dart';
 import '../navigation/leader_shell.dart';
 import '../navigation/member_shell.dart';
 import 'router_refresh.dart';
@@ -69,6 +74,22 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/leader/analytics',
         builder: (context, state) => const AnalyticsScreen(),
       ),
+      // Phase 6. Before '/member/leave/:leaveId' so "new" isn't read as
+      // an id.
+      GoRoute(
+        path: '/member/leave/new',
+        builder: (context, state) => const LeaveRequestFormScreen(),
+      ),
+      GoRoute(
+        path: '/member/leave/:leaveId',
+        builder: (context, state) =>
+            LeaveDetailScreen(leaveId: state.pathParameters['leaveId']!),
+      ),
+      GoRoute(
+        path: '/leader/team/:uid',
+        builder: (context, state) =>
+            MemberProfileScreen(uid: state.pathParameters['uid']!),
+      ),
       // Before '/leader/projects/:projectId' so "new" isn't read as an id.
       GoRoute(
         path: '/leader/projects/new',
@@ -107,6 +128,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   taskId: state.pathParameters['taskId']!,
                 ),
               ),
+              ..._taskActivityRoutes(),
             ],
           ),
         ],
@@ -122,6 +144,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               projectId: state.pathParameters['projectId']!,
               taskId: state.pathParameters['taskId']!,
             ),
+            routes: _taskActivityRoutes(),
           ),
           GoRoute(
             path: 'chat',
@@ -166,6 +189,26 @@ final routerProvider = Provider<GoRouter>((ref) {
 StatefulShellBranch _tab(String path, Widget screen) => StatefulShellBranch(
   routes: [GoRoute(path: path, builder: (context, state) => screen)],
 );
+
+/// Phase 4: Comments / History and Need Help under a task, on both
+/// dashboards. What each screen allows comes from the project's `members`
+/// map, never the route.
+List<GoRoute> _taskActivityRoutes() => [
+  GoRoute(
+    path: 'activity',
+    builder: (context, state) => TaskActivityScreen(
+      projectId: state.pathParameters['projectId']!,
+      taskId: state.pathParameters['taskId']!,
+    ),
+  ),
+  GoRoute(
+    path: 'help',
+    builder: (context, state) => NeedHelpScreen(
+      projectId: state.pathParameters['projectId']!,
+      taskId: state.pathParameters['taskId']!,
+    ),
+  ),
+];
 
 /// Pure auth gate behind [routerProvider]'s `redirect`; `null` means stay.
 String? authRedirect(AuthState auth, String location) {

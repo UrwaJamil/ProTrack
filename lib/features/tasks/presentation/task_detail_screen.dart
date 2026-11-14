@@ -6,6 +6,7 @@ import '../../../core/widgets/state_views.dart';
 import '../../projects/application/projects_providers.dart';
 import '../application/task_permissions.dart';
 import '../application/tasks_providers.dart';
+import 'task_activity_paths.dart';
 import 'task_paths.dart';
 import 'task_ui_actions.dart';
 import 'widgets/task_detail_body.dart';
@@ -43,6 +44,20 @@ class TaskDetailScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Task Details'),
         actions: [
+          if (task != null)
+            IconButton(
+              tooltip: 'Comments & history',
+              onPressed: () => context.push(
+                taskActivityPath(
+                  projectId,
+                  taskId,
+                  adminView: isAdminLocation(
+                    GoRouterState.of(context).uri.path,
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.forum_outlined),
+            ),
           if (permissions?.canEdit ?? false)
             TextButton.icon(
               style: TextButton.styleFrom(
